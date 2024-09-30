@@ -1,0 +1,14 @@
+.bloop/
+.bsp/
+.idea/
+.metals/
+.vscode/
+
+project/
+!project/build.properties
+
+target
+commons/target
+gradcc/target
+
+*.class

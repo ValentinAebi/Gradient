@@ -1,0 +1,87 @@
+package gradcc.parsing
+
+import commons.*
+import gradcc.lang.{Conventions, Keyword, Operator}
+import gradcc.parsing
+
+import scala.util.matching.Regex
+
+type Code = String
+type Filename = String
+
+
+final class Scanner extends Phase[(Code, Filename), Seq[Token]] {
+  override val phaseName: String = "Scanner"
+
+  private val commentMatcher: Matcher = (str: String, pos: Position) =>
+    if str.startsWith(Conventions.commentMarker) then Some(CommentToken(str, pos)) else None
+
+  private def operatorMatcher(operator: Operator): Matcher = {
+    (str: String, pos: Position) => if str.startsWith(operator.str) then Some(OperatorToken(operator, pos)) else None
+  }
+
+  private def keywordMatcher(keyword: Keyword): Matcher = {
+    (str: String, pos: Position) => if str.startsWith(keyword.str) then Some(KeywordToken(keyword, pos)) else None
+  }
+
+  private def regexMatcher(regex: Regex, mkTok: (str: String, pos: Position) => Token): Matcher = {
+    (str: String, pos: Position) => regex.findPrefixOf(str).map(mkTok(_, pos))
+  }
+
+  private val matchers: Seq[Matcher] =
+    List(commentMatcher) ++
+      Operator.values.sortBy(-_.str.length).map(operatorMatcher) ++
+      Keyword.values.sortBy(-_.str.length).map(keywordMatcher) ++
+      List(
+        regexMatcher("(?:[a-z]|_)(?:[A-Z]|[a-z]|[0-9]|_)*".r, LowerWordToken(_, _)),
+        regexMatcher("[A-Z](?:[A-Z]|[a-z]|[0-9]|_)*".r, UpperWordToken(_, _)),
+        regexMatcher("(\\s)+".r, SpaceToken(_, _)),
+        regexMatcher("(\\S)+".r, ErrorToken(_, _))
+      )
+
+  {
+    // Internal check
+    var idx = 0
+    for (matcher <- matchers) {
+      if (matcher.accept("", null).isDefined) {
+        throw IllegalStateException(s"matcher at index $idx accepts the empty string")
+      }
+      idx += 1
+    }
+  }
+
+  private val lazyMatchers = LazyList.from(matchers)
+
+  override def run(in: (Code, Filename), reporter: Reporter): PhaseResult[Seq[Token]] = {
+    val (code, filename) = in
+    val tokens = List.newBuilder[Token]
+    var lineNumber = 1
+    code.lines().forEach { line =>
+      var rem = line
+      var columnNumber = 1
+      while (rem.nonEmpty) {
+        val position = Position(filename, lineNumber, columnNumber)
+        val tok =
+          lazyMatchers.map(_.accept(rem, position))
+            .filter(_.isDefined)
+            .map(_.get)
+            .headOption
+            .getOrElse(throw AssertionError(s"No matcher matched $rem"))
+        tokens.addOne(tok)
+        if (tok.isInstanceOf[ErrorToken]) {
+          reporter.error(s"unrecognized character sequence: ${tok.str}", position)
+        }
+        val len = tok.str.length
+        columnNumber += len
+        rem = rem.substring(len)
+      }
+      lineNumber += 1
+    }
+    Success(tokens.result())
+  }
+
+  private trait Matcher {
+    def accept(str: String, pos: Position): Option[Token]
+  }
+
+}
