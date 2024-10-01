@@ -13,5 +13,6 @@ lazy val commons = project.in(file("commons"))
 lazy val gradcc = project.in(file("gradcc"))
   .settings(
     scalaVersion := scala351,
-    version := version010snap
+    version := version010snap,
+    libraryDependencies += "org.junit.jupiter" % "junit-jupiter-api" % "5.11.1" % Test
   ).dependsOn(commons)
