@@ -1,7 +1,7 @@
 package commons
 
 
-trait Phase[In, Out] {
+sealed trait Phase[In, Out] {
   topLevelPhase =>
 
   val phaseName: String
@@ -15,7 +15,7 @@ trait Phase[In, Out] {
 
 trait SimplePhase[In, Out](override val phaseName: String) extends Phase[In, Out] {
 
-  override def run(in: In, reporter: Reporter): PhaseResult[Out] = {
+  override final def run(in: In, reporter: Reporter): PhaseResult[Out] = {
     try {
       val res = runImpl(in, reporter)
       if reporter.compilerMustStop() then NonFatal else Success(res)

@@ -10,8 +10,7 @@ type Code = String
 type Filename = String
 
 
-final class Scanner extends Phase[(Code, Filename), Seq[Token]] {
-  override val phaseName: String = "Scanner"
+final class Scanner extends SimplePhase[(Code, Filename), Seq[Token]]("Scanner") {
 
   private val commentMatcher: Matcher = (str: String, pos: Position) =>
     if str.startsWith(Conventions.commentMarker) then Some(CommentToken(str, pos)) else None
@@ -52,11 +51,13 @@ final class Scanner extends Phase[(Code, Filename), Seq[Token]] {
 
   private val lazyMatchers = LazyList.from(matchers)
 
-  override def run(in: (Code, Filename), reporter: Reporter): PhaseResult[Seq[Token]] = {
+  override protected def runImpl(in: (Code, Filename), reporter: Reporter): Seq[Token] = {
     val (code, filename) = in
     val tokens = List.newBuilder[Token]
     var lineNumber = 1
-    code.lines().forEach { line =>
+    val lines = code.lines().toArray(new Array[String](_))
+    val lastLineIdx = lines.size
+    for (line <- lines) {
       var rem = line
       var columnNumber = 1
       while (rem.nonEmpty) {
@@ -75,9 +76,12 @@ final class Scanner extends Phase[(Code, Filename), Seq[Token]] {
         columnNumber += len
         rem = rem.substring(len)
       }
+      if (lineNumber == lastLineIdx){
+        tokens.addOne(EndOfFileToken(Position(filename, lineNumber, columnNumber)))
+      }
       lineNumber += 1
     }
-    Success(tokens.result())
+    tokens.result()
   }
 
   private trait Matcher {

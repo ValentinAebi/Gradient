@@ -11,4 +11,6 @@ enum Operator(val str: String) {
   case Equal extends Operator("=")
   case ColumnEqual extends Operator(":=")
   case Hat extends Operator("^")
+
+  override def toString: String = str
 }
