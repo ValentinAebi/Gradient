@@ -10,7 +10,7 @@ type Code = String
 type Filename = String
 
 
-final class Scanner extends SimplePhase[(Code, Filename), Seq[Token]]("Scanner") {
+final class Scanner extends SimplePhase[(Code, Filename), Seq[GradCCToken]]("Scanner") {
 
   private val commentMatcher: Matcher = (str: String, pos: Position) =>
     if str.startsWith(Conventions.commentMarker) then Some(CommentToken(str, pos)) else None
@@ -23,7 +23,7 @@ final class Scanner extends SimplePhase[(Code, Filename), Seq[Token]]("Scanner")
     (str: String, pos: Position) => if str.startsWith(keyword.str) then Some(KeywordToken(keyword, pos)) else None
   }
 
-  private def regexMatcher(regex: Regex, mkTok: (str: String, pos: Position) => Token): Matcher = {
+  private def regexMatcher(regex: Regex, mkTok: (str: String, pos: Position) => GradCCToken): Matcher = {
     (str: String, pos: Position) => regex.findPrefixOf(str).map(mkTok(_, pos))
   }
 
@@ -51,9 +51,9 @@ final class Scanner extends SimplePhase[(Code, Filename), Seq[Token]]("Scanner")
 
   private val lazyMatchers = LazyList.from(matchers)
 
-  override protected def runImpl(in: (Code, Filename), reporter: Reporter): Seq[Token] = {
+  override protected def runImpl(in: (Code, Filename), reporter: Reporter): Seq[GradCCToken] = {
     val (code, filename) = in
-    val tokens = List.newBuilder[Token]
+    val tokens = List.newBuilder[GradCCToken]
     var lineNumber = 1
     val lines = code.lines().toArray(new Array[String](_))
     val lastLineIdx = lines.size
@@ -85,7 +85,7 @@ final class Scanner extends SimplePhase[(Code, Filename), Seq[Token]]("Scanner")
   }
 
   private trait Matcher {
-    def accept(str: String, pos: Position): Option[Token]
+    def accept(str: String, pos: Position): Option[GradCCToken]
   }
 
 }

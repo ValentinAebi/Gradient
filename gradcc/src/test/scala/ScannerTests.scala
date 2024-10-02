@@ -40,7 +40,7 @@ class ScannerTests {
       "x" -> (3, 14),
       " " -> (3, 15),
       "y" -> (3, 16),
-      "<eof>" -> (3, 17)
+      "<end-of-file>" -> (3, 17)
     )
     val actualIter = actual.iterator
     val expectedIter = expected.iterator
