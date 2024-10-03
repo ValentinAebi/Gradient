@@ -13,8 +13,9 @@ class ParsingIterator[Tok <: KindedToken](tokens: Seq[Tok]) {
   def canMove: Boolean = remTokens.tail.nonEmpty
 
   def move(reporter: Reporter): Unit = {
-    val pos = current.pos   // FIXME this is the start position of the previous token
+    val pos = current.pos
     if (!canMove) {
+      // FIXME pos is the start position of the previous token
       reporter.fatal("unexpected end of tokens flow", pos)
     }
     remTokens = remTokens.tail

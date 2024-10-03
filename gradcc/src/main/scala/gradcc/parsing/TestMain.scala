@@ -23,7 +23,7 @@ import commons.{Fatal, NonFatal, Reporter, Success}
   //      |let main = newMain fs net in
   //      |main.main()
   //      |""".stripMargin
-  val str = "let foo = bar a : b p = c d e f"
+  val str = "let foo = bar a : b p = c d: e"
   val pipeline = new Scanner().andThen(new Parser())
   val res = pipeline.run((str, "Example.gradcc"), reporter)
   println(

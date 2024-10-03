@@ -1,6 +1,6 @@
 package commons.parsing
 
-import commons.Reporter
+import commons.{Position, Reporter}
 
 def rep[Tok <: KindedToken, I](r: TreeParser[Tok, I]): TreeParser[Tok, List[I]] = RepParser(r)
 
@@ -21,30 +21,33 @@ trait TreeParser[Tok <: KindedToken, A] {
 
   infix def opt: TreeParser[Tok, Option[A]] = OptParser(a)
 
-  def first: Set[TokenKind]
+  def map[B](f: A => Position ?=> B): TreeParser[Tok, B] = MapParser(this, f)
+
+  def first: Set[TokenKind[?]]
 
   def mayBeTransparent: Boolean
 
 }
 
-final class LeafParser[Tok <: KindedToken, Result](tokenKind: TokenKind)(f: Tok => Result) extends TreeParser[Tok, Result] {
+final class LeafParser[Tok <: KindedToken, ResTok <: Tok](tokenKind: TokenKind[ResTok])
+  extends TreeParser[Tok, ResTok] {
 
   override val descr: String = tokenKind.toString
 
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
     iterator.current.kind == tokenKind
 
-  override def consume(iterator: ParsingIterator[Tok], nextAdmits: => Boolean, reporter: Reporter): Result = {
-    val tok = iterator.current
-    if (tok.kind != tokenKind) {
-      val token = iterator.current
+  override def consume(iterator: ParsingIterator[Tok], nextAdmits: => Boolean, reporter: Reporter): ResTok = {
+    val token = iterator.current
+    tokenKind.ifMatchesOrElse(token) { token =>
+      iterator.move(reporter)
+      token
+    } {
       reporter.fatal(s"unexpected token: '$token'", token.pos)
     }
-    iterator.move(reporter)
-    f(tok)
   }
 
-  override def first: Set[TokenKind] = Set(tokenKind)
+  override def first: Set[TokenKind[?]] = Set(tokenKind)
 
   override def mayBeTransparent: Boolean = false
 }
@@ -70,7 +73,7 @@ final class ConcatParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: Tre
     new~(lRes, rRes)
   }
 
-  override def first: Set[TokenKind] = if l.mayBeTransparent then l.first ++ r.first else l.first
+  override def first: Set[TokenKind[?]] = if l.mayBeTransparent then l.first ++ r.first else l.first
 
   override def mayBeTransparent: Boolean = l.mayBeTransparent && r.mayBeTransparent
 }
@@ -95,7 +98,7 @@ final class OrParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: TreePar
     if lAdmits then l.consume(iterator, nextAdmitsLazy, reporter) else r.consume(iterator, nextAdmitsLazy, reporter)
   }
 
-  override def first: Set[TokenKind] = l.first ++ r.first
+  override def first: Set[TokenKind[?]] = l.first ++ r.first
 
   override def mayBeTransparent: Boolean = l.mayBeTransparent || r.mayBeTransparent
 }
@@ -114,7 +117,7 @@ final class OptParser[Tok <: KindedToken, O](opt: TreeParser[Tok, O]) extends Tr
     if optAdmits then Some(opt.consume(iterator, nextAdmits, reporter)) else None
   }
 
-  override def first: Set[TokenKind] = opt.first
+  override def first: Set[TokenKind[?]] = opt.first
 
   override def mayBeTransparent: Boolean = true
 }
@@ -131,16 +134,42 @@ final class RepParser[Tok <: KindedToken, I](repeated: TreeParser[Tok, I]) exten
     val repAdmits = repeated.admits(iterator, nextAdmits)
     require(!repAdmits || !nextAdmits)
     val lsBuilder = List.newBuilder[I]
-    while (repeated.admits(iterator, nextAdmits)){
+    while (repeated.admits(iterator, nextAdmits)) {
       val iterRes = repeated.consume(iterator, nextAdmits, reporter)
       lsBuilder.addOne(iterRes)
     }
     lsBuilder.result()
   }
 
-  override def first: Set[TokenKind] = repeated.first
+  override def first: Set[TokenKind[?]] = repeated.first
 
   override def mayBeTransparent: Boolean = true
+}
+
+final class MapParser[Tok <: KindedToken, A, B](baseParser: TreeParser[Tok, A], mapF: A => Position ?=> B) extends TreeParser[Tok, B] {
+  override val descr: String = baseParser.descr
+
+  export baseParser.{admits, first, mayBeTransparent}
+
+  override def consume(iterator: ParsingIterator[Tok], nextAdmits: => Boolean, reporter: Reporter): B = {
+    val pos = iterator.current.pos
+    val a = baseParser.consume(iterator, nextAdmits, reporter)
+    mapF(a)(using pos)
+  }
+
+}
+
+final class EofParser[Tok <: KindedToken](eofKind: TokenKind[?]) extends TreeParser[Tok, Unit] {
+  override val descr: String = "<end-of-file>"
+
+  override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
+    eofKind.matches(iterator.current)
+
+  override def consume(iterator: ParsingIterator[Tok], nextAdmits: => Boolean, reporter: Reporter): Unit = ()
+
+  override def first: Set[TokenKind[?]] = Set(eofKind)
+
+  override def mayBeTransparent: Boolean = false
 }
 
 final infix case class ~[L, R](l: L, r: R) {

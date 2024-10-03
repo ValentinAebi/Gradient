@@ -1,7 +1,7 @@
 package gradcc.parsing
 
-import commons.parsing.{LeafParser, ParsingIterator, TokenKind, TreeParser, rep, ~}
-import commons.{Reporter, SimplePhase}
+import commons.parsing.*
+import commons.{Position, Reporter, SimplePhase}
 import gradcc.*
 import gradcc.lang.Keyword.LetKw
 import gradcc.lang.Operator.{Colon, Equal}
@@ -16,7 +16,7 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
     val iter = ParsingIterator[KindedGradCCToken](interestingTokens)
 
     // TODO remove this (debug example)
-    val syntax = kw(LetKw) ~ rep(lower ~ (op(Equal) | op(Colon)) ~ lower) ~ EofParser
+    val syntax = kw(LetKw) ~ rep(lower ~ (op(Equal) | op(Colon)) ~ lower) ~ eof
     syntax.consume(iter, throw new AssertionError("should never be invoked"), reporter) match {
       case let ~ ls ~ () => {
         println(ls.map { case l ~ op ~ r => s"'$l' '$op' '$r'" }.mkString("\n"))
@@ -25,32 +25,15 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
     null
   }
 
-  private def lower = LeafParser(LowerKind){
-    (tok: KindedGradCCToken) => tok.str
-  }
+  private def lower = LowerKind.parser
 
-  private def kw(kw: Keyword) = LeafParser(KeywordKind(kw)){
-    (tok: KindedGradCCToken) => kw
-  }
+  private def kw(kw: Keyword) = KeywordKind(kw).parser
 
-  private def op(op: Operator) = LeafParser(OperatorKind(op)){
-    (tok: KindedGradCCToken) => op
-  }
+  private def op(op: Operator) = OperatorKind(op).parser
 
-  private object EofParser extends TreeParser[KindedGradCCToken, Unit] {
-    override val descr: String = "<eof>"
+  private def eof = EofParser[KindedGradCCToken](EofKind)
 
-    override def admits(iterator: ParsingIterator[KindedGradCCToken], nextAdmits: => Boolean): Boolean =
-      iterator.current.kind == EofKind
-
-    override def consume(iterator: ParsingIterator[KindedGradCCToken], nextAdmits: => Boolean, reporter: Reporter): Unit = {
-      assert(iterator.current.kind == EofKind && !iterator.canMove)
-    }
-
-    override def first: Set[TokenKind] = Set(EofKind)
-
-    override def mayBeTransparent: Boolean = false
-  }
+  private def pos(using Position): Position = summon
 
   private def filterIsKindedToken(tokens: Seq[GradCCToken]): Seq[KindedGradCCToken] = {
     val b = ListBuffer.empty[KindedGradCCToken]
