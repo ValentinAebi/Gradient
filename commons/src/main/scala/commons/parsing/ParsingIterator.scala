@@ -2,15 +2,16 @@ package commons.parsing
 
 import commons.Reporter
 
-class ParsingIterator[Tok <: KindedToken](tokens: Seq[Tok]) {
+import scala.collection.immutable.ArraySeq
+
+class ParsingIterator[+Tok <: KindedToken](tokens: ArraySeq[Tok]) {
   require(tokens.nonEmpty)
+  
+  private var currIdx = 0
 
-  private val nTokens: Int = tokens.size
-  private var remTokens: List[Tok] = tokens.toList
+  def current: Tok = tokens(currIdx)
 
-  def current: Tok = remTokens.head
-
-  def canMove: Boolean = remTokens.tail.nonEmpty
+  def canMove: Boolean = currIdx < tokens.size - 1
 
   def move(reporter: Reporter): Unit = {
     val pos = current.pos
@@ -18,7 +19,7 @@ class ParsingIterator[Tok <: KindedToken](tokens: Seq[Tok]) {
       // FIXME pos is the start position of the previous token
       reporter.fatal("unexpected end of tokens flow", pos)
     }
-    remTokens = remTokens.tail
+    currIdx += 1
   }
 
 }

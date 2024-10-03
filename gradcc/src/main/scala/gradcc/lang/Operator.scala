@@ -4,6 +4,7 @@ enum Operator(val str: String) {
   case Dot extends Operator(".")
   case Comma extends Operator(",")
   case Colon extends Operator(":")
+  case Bang extends Operator("!")
   case OpenParenth extends Operator("(")
   case CloseParenth extends Operator(")")
   case OpenBrace extends Operator("{")
