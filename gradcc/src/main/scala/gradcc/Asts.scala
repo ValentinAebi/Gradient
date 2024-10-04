@@ -33,7 +33,7 @@ final case class Ref(regionCap: Path, initVal: Path, override val position: Posi
 final case class Modif(regionCap: Path, fields: Seq[(Field, Path)], override val position: Position) extends Term
 
 
-final case class Type(shape: TypeShape, captureSet: CaptureSet, override val position: Position) extends Ast
+final case class Type(shape: TypeShape, captureSet: Option[CaptureSet], override val position: Position) extends Ast
 
 sealed trait TypeShape extends Ast
 final case class TypeId(id: String, override val position: Position) extends TypeShape
@@ -43,8 +43,8 @@ final case class BoxType(boxedType: Type, override val position: Position) exten
 final case class UnitType(override val position: Position) extends TypeShape
 final case class RefType(referencedType: TypeShape, override val position: Position) extends TypeShape
 final case class RegType(override val position: Position) extends TypeShape
-final case class RecordType(fields: Map[Identifier, Type], selfRef: Option[Identifier], override val position: Position) extends TypeShape
+final case class RecordType(fieldsInOrder: Seq[(Identifier, Type)], selfRef: Option[Identifier], override val position: Position) extends TypeShape
 
-final case class CaptureSet(capturedVarsInOrder: Seq[Path], override val position: Position) extends Ast {
-  val capturedVars: Set[Path] = capturedVarsInOrder.toSet
-}
+sealed trait CaptureSet extends Ast
+final case class ExplicitCaptureSet(capturedVarsInOrder: Seq[Path], override val position: Position) extends CaptureSet
+final case class ImplicitCaptureSet(override val position: Position) extends CaptureSet

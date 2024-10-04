@@ -13,8 +13,9 @@ enum Keyword(val str: String) {
   case RegionKw extends Keyword("region")
   case SelfKw extends Keyword("self")
   case TopKw extends Keyword("Top")
-  case UnitKw extends Keyword("Unit")
   case UnboxKw extends Keyword("unbox")
+  case UnitKw extends Keyword("Unit")
+  case Using extends Keyword("using")
 
   override def toString: String = str
 }

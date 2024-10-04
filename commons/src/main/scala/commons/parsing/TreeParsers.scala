@@ -30,13 +30,9 @@ extension [Tok <: KindedToken, A](p: => TreeParser[Tok, A]) def asLazy: TreePars
 trait TreeParser[Tok <: KindedToken, +A] {
   a =>
 
-  def descr: String
-
   def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean
 
   def consume(iterator: ParsingIterator[Tok], reporter: Reporter, nextAdmits: => Boolean): A
-
-  override def toString: String = descr
 
   infix def ~[B](b: TreeParser[Tok, B]): TreeParser[Tok, A ~ B] = ConcatParser(a, b)
 
@@ -53,8 +49,6 @@ trait TreeParser[Tok <: KindedToken, +A] {
 final class LeafParser[Tok <: KindedToken, ResTok <: Tok](tokenKind: TokenKind[ResTok])
   extends TreeParser[Tok, ResTok] {
 
-  override def descr: String = tokenKind.toString
-
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
     iterator.current.kind == tokenKind
 
@@ -64,7 +58,7 @@ final class LeafParser[Tok <: KindedToken, ResTok <: Tok](tokenKind: TokenKind[R
       iterator.move(reporter)
       token
     } {
-      reporter.fatal(s"unexpected token: '$token'", token.pos)
+      reporter.fatal(s"unexpected token: '$token', expected one of the following: ${first.mkString("['", "', '", "']")}", token.pos)
     }
   }
 
@@ -76,14 +70,7 @@ final class LeafParser[Tok <: KindedToken, ResTok <: Tok](tokenKind: TokenKind[R
 final class ConcatParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: TreeParser[Tok, R])
   extends TreeParser[Tok, L ~ R] {
   if (l.mayBeTransparent) {
-    requireDisjointFirsts(l, r, descr)
-  }
-
-  override def descr: String = s"${maybeParenthDescr(l)} ~ ${maybeParenthDescr(r)}"
-
-  private def maybeParenthDescr(p: TreeParser[?, ?]): String = p match {
-    case _: OrParser[?, ?, ?] => s"(${p.descr})"
-    case _ => p.descr
+    requireDisjointFirsts(l, r)
   }
 
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
@@ -102,9 +89,7 @@ final class ConcatParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: Tre
 
 final class OrParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: TreeParser[Tok, R])
   extends TreeParser[Tok, L | R] {
-  requireDisjointFirsts(l, r, descr)
-
-  override def descr: String = s"${l.descr} | ${r.descr}"
+  requireDisjointFirsts(l, r)
 
   override def admits(iterator: ParsingIterator[Tok], nextAdmitsByName: => Boolean): Boolean = {
     lazy val nextAdmitsLazy = nextAdmitsByName
@@ -115,7 +100,7 @@ final class OrParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: TreePar
     lazy val nextAdmitsLazy = nextAdmitsByName
     val lAdmits = l.admits(iterator, nextAdmitsLazy)
     val rAdmits = r.admits(iterator, nextAdmitsLazy)
-    assert(!lAdmits || !rAdmits, s"Not LL1: $descr")
+    assert(!lAdmits || !rAdmits, s"Not LL1")
     (if lAdmits then l else r).consume(iterator, reporter, nextAdmitsLazy)
   }
 
@@ -127,14 +112,12 @@ final class OrParser[Tok <: KindedToken, L, R](l: TreeParser[Tok, L], r: TreePar
 final class OptParser[Tok <: KindedToken, O](opt: TreeParser[Tok, O]) extends TreeParser[Tok, Option[O]] {
   require(!opt.mayBeTransparent)
 
-  override def descr: String = s"[${opt.descr}]"
-
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
     opt.admits(iterator, nextAdmits) || nextAdmits
 
   override def consume(iterator: ParsingIterator[Tok], reporter: Reporter, nextAdmits: => Boolean): Option[O] = {
     val optAdmits = opt.admits(iterator, nextAdmits)
-    assert(!optAdmits || !nextAdmits, s"Not LL1: $descr")
+    assert(!optAdmits || !nextAdmits, s"Not LL1")
     if optAdmits then Some(opt.consume(iterator, reporter, nextAdmits)) else None
   }
 
@@ -145,8 +128,6 @@ final class OptParser[Tok <: KindedToken, O](opt: TreeParser[Tok, O]) extends Tr
 
 final class RepParser[Tok <: KindedToken, I](repeated: TreeParser[Tok, I]) extends TreeParser[Tok, List[I]] {
   require(!repeated.mayBeTransparent)
-
-  override def descr: String = s"rep { $repeated }"
 
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
     repeated.admits(iterator, nextAdmits)
@@ -168,7 +149,6 @@ final class RepParser[Tok <: KindedToken, I](repeated: TreeParser[Tok, I]) exten
 }
 
 final class MapParser[Tok <: KindedToken, A, B](baseParser: TreeParser[Tok, A], mapF: Position ?=> A => B) extends TreeParser[Tok, B] {
-  override def descr: String = baseParser.descr
 
   export baseParser.{admits, first, mayBeTransparent}
 
@@ -181,7 +161,6 @@ final class MapParser[Tok <: KindedToken, A, B](baseParser: TreeParser[Tok, A], 
 }
 
 final class EofParser[Tok <: KindedToken](eofKind: TokenKind[?]) extends TreeParser[Tok, Unit] {
-  override def descr: String = "<end-of-file>"
 
   override def admits(iterator: ParsingIterator[Tok], nextAdmits: => Boolean): Boolean =
     eofKind.matches(iterator.current)
@@ -198,10 +177,10 @@ final class LazyTreeParser[Tok <: KindedToken, A](baseParser: => TreeParser[Tok,
   export baseParserComputeOnce.*
 }
 
-private def requireDisjointFirsts(l: TreeParser[?, ?], r: TreeParser[?, ?], descr: => String): Unit = {
+private def requireDisjointFirsts(l: TreeParser[?, ?], r: TreeParser[?, ?]): Unit = {
   val inter = l.first.intersect(r.first)
   if (inter.nonEmpty){
-    throw IllegalAccessException(s"Parser $descr is not LL1. Conflicts found involving the following kinds: $inter")
+    throw IllegalAccessException(s"Parser is not LL1. Conflicts found involving the following kinds: ${inter.mkString(", ")}")
   }
 }
 

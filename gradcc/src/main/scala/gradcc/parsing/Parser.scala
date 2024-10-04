@@ -54,8 +54,8 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
   }.asLazy
 
   private lazy val abs: P[Abs] = (kw(FnKw) ~ rep1(openParenth ~ identifier ~ colon ~ tpe ~ closeParenth) ~ term).map {
-    case _ ~ ((_ ~ param1Id ~ _ ~ param1Type ~ _) ~ subSequentParams) ~ body => {
-      val abs1Body = subSequentParams.foldRight(body) {
+    case _ ~ (_ ~ param1Id ~ _ ~ param1Type ~ _ ~ subsequentParams) ~ body => {
+      val abs1Body = subsequentParams.foldRight(body) {
         (param, accBody) => {
           val _ ~ id ~ _ ~ tpe ~ _ = param
           Abs(id, tpe, accBody, id.position)
@@ -75,8 +75,8 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
 
   private lazy val value: P[Value] = (box | abs | recordLit | unitLit).asLazy
 
-  private lazy val unbox: P[Unbox] = (captureSet ~ kw(UnboxKw) ~ path).map {
-    case capSet ~ _ ~ p => Unbox(capSet, p, startPos)
+  private lazy val unbox: P[Unbox] = (kw(UnboxKw) ~ path ~ kw(Using) ~ explicitCaptureSet).map {
+    case _ ~ p ~ _ ~ capSet => Unbox(capSet, p, startPos)
   }.asLazy
 
   private lazy val let: P[Let] = (kw(LetKw) ~ identifier ~ equal ~ term ~ kw(InKw) ~ term).map {
@@ -122,36 +122,53 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
     case _ ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => DepType(param, paramType, bodyType, startPos)
   }.asLazy
 
-  private lazy val boxType: P[BoxType] = ???
+  private lazy val boxType: P[BoxType] = (kw(BoxKw) ~ tpe).map {
+    case _ ~ boxed => BoxType(boxed, startPos)
+  }.asLazy
 
   private lazy val unitType: P[UnitType] = kw(UnitKw).map(_ => UnitType(startPos)).asLazy
 
-  private lazy val refType: P[RefType] = ???
+  private lazy val refType: P[RefType] = (kw(RefKw) ~ typeShape).map {
+    case _ ~ referenced => RefType(referenced, startPos)
+  }.asLazy
 
-  private lazy val regType: P[RegType] = ???
+  private lazy val regType: P[RegType] = kw(RegKw).map(_ => RegType(startPos)).asLazy
 
-  private lazy val recordType: P[RecordType] = ???
+  private lazy val recordType: P[RecordType] =
+    (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(identifier ~ colon ~ tpe) ~ closeBrace).map {
+      case idToksOpt ~ _ ~ fieldsToks ~ _ => {
+        val idOpt = idToksOpt.map {
+          case _ ~ id ~ _ => id
+        }
+        val fields = fieldsToks.map {
+          case fldName ~ _ ~ fldType => (fldName, fldType)
+        }
+        RecordType(fields, idOpt, startPos)
+      }
+    }
 
   private lazy val typeShape: P[TypeShape] = (topType | depType | boxType | unitType | refType | regType | recordType).asLazy
 
-  private lazy val tpe: P[Type] = (typeShape ~ op(Hat) ~ opt(captureSet)).map {
-    case shape ~ hat ~ capSetOpt => Type(shape, capSetOpt.getOrElse(CaptureSet(Seq.empty, hat.pos)), startPos)
+  private lazy val tpe: P[Type] = (typeShape ~ opt(op(Hat) ~ opt(explicitCaptureSet))).map {
+    case shape ~ Some(_ ~ Some(explicitCapSet)) =>
+      Type(shape, Some(explicitCapSet), startPos)
+    case shape ~ Some(hat ~ None) =>
+      Type(shape, Some(ImplicitCaptureSet(hat.pos)), startPos)
+    case shape ~ None =>
+      Type(shape, None, startPos)
   }.asLazy
 
-  private lazy val captureSet: P[CaptureSet] = (openBrace ~ repWithSep(path, comma) ~ closeBrace).map {
-    case _ ~ capPaths ~ _ => CaptureSet(capPaths, startPos)
+  private lazy val explicitCaptureSet: P[ExplicitCaptureSet] = (openBrace ~ repWithSep(path, comma) ~ closeBrace).map {
+    case _ ~ capPaths ~ _ => ExplicitCaptureSet(capPaths, startPos)
   }.asLazy
+
 
   override protected def runImpl(in: Seq[GradCCToken], reporter: Reporter): Ast = {
     val interestingTokens = filterIsKindedToken(in)
     val iter = ParsingIterator[KindedGradCCToken](interestingTokens)
-
-    val syntax = abs ~ eof
-    val r = syntax.consume(iter, reporter, assert(false))
-    println(r)
-
-    // TODO remove this
-    null
+    val syntax = term ~ eof
+    val r ~ _ = syntax.consume(iter, reporter, assert(false))
+    r
   }
 
   private def startPos(using Position): Position = summon

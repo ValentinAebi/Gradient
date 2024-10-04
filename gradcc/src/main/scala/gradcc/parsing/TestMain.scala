@@ -23,12 +23,12 @@ import commons.{Fatal, NonFatal, Reporter, Success}
   //      |let main = newMain fs net in
   //      |main.main()
   //      |""".stripMargin
-  val str = "fn (x: Foo) f x x"
+  val str = "fn (x: Unit) f x x"
   val pipeline = new Scanner().andThen(new Parser())
   val res = pipeline.run((str, "Example.gradcc"), reporter)
   println(
     res match
-      case Success(value) => "Success"
+      case Success(value) => s"Success: $value"
       case Fatal(fatalErrorException) => s"Fatal error: ${fatalErrorException.msg} at ${fatalErrorException.pos.getOrElse("??")}"
       case NonFatal => "Non-fatal error(s) terminated the pipeline (see reporter)"
   )
