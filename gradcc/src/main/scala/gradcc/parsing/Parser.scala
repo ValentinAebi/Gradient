@@ -71,9 +71,7 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
     }, startPos)
   }.asLazy
 
-  private lazy val unitLit: P[UnitLiteral] = (openParenth ~ closeParenth).map(_ => UnitLiteral(startPos)).asLazy
-
-  private lazy val value: P[Value] = (box | abs | recordLit | unitLit).asLazy
+  private lazy val nonUnitValue: P[Value] = (box | abs | recordLit).asLazy
 
   private lazy val unbox: P[Unbox] = (kw(UnboxKw) ~ path ~ kw(Using) ~ explicitCaptureSet).map {
     case _ ~ p ~ _ ~ capSet => Unbox(capSet, p, startPos)
@@ -110,7 +108,13 @@ class Parser extends SimplePhase[Seq[GradCCToken], Ast]("Parser") {
         }
     }.asLazy
 
-  private lazy val term: P[Term] = (termStartingWithPath | cap | value | unbox | let | region | deref | modif).asLazy
+  private lazy val term: P[Term] =
+    (termStartingWithPath | cap | nonUnitValue | unbox | let | region | deref | modif | unitOrParenth).asLazy
+
+  private lazy val unitOrParenth: P[Term] = (openParenth ~ opt(term) ~ closeParenth).map {
+    case _ ~ Some(t) ~ _ => t
+    case _ ~ None ~ _ => UnitLiteral(startPos)
+  }.asLazy
 
   private lazy val typeId: P[TypeId] = upper.map {
     case UpperWordToken(str, pos) => TypeId(str, pos)
