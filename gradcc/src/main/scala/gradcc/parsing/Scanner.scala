@@ -60,8 +60,9 @@ final class Scanner extends SimplePhase[(Code, Filename), Seq[GradCCToken]]("Sca
     for (line <- lines) {
       var rem = line
       var columnNumber = 1
+      var lastLine = ""
       while (rem.nonEmpty) {
-        val position = Position(filename, lineNumber, columnNumber)
+        val position = Position(filename, lineNumber, columnNumber, line)
         val tok =
           lazyMatchers.map(_.accept(rem, position))
             .filter(_.isDefined)
@@ -75,9 +76,10 @@ final class Scanner extends SimplePhase[(Code, Filename), Seq[GradCCToken]]("Sca
         val len = tok.str.length
         columnNumber += len
         rem = rem.substring(len)
+        lastLine = line
       }
       if (lineNumber == lastLineIdx){
-        tokens.addOne(EndOfFileToken(Position(filename, lineNumber, columnNumber)))
+        tokens.addOne(EndOfFileToken(Position(filename, lineNumber, columnNumber, lastLine)))
       }
       lineNumber += 1
     }

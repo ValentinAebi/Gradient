@@ -47,7 +47,7 @@ class ScannerTests {
     while (actualIter.hasNext && expectedIter.hasNext) {
       val actualToken = actualIter.next()
       val pos = actualToken.pos
-      assertEquals(expectedIter.next(), actualToken.str -> (pos.line, pos.col))
+      assertEquals(expectedIter.next(), actualToken.str -> (pos.line, pos.column))
     }
     assertFalse(actualIter.hasNext)
     assertFalse(expectedIter.hasNext)

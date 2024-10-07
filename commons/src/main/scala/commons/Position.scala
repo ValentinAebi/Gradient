@@ -1,7 +1,7 @@
 package commons
 
-final case class Position(file: String, line: Int, col: Int){
+case class Position(file: String, line: Int, column: Int, lineContents: String){
 
-  override def toString: String = s"$file:$line:$col"
+  override def toString: String = s"$file:$line:$column"
   
 }
