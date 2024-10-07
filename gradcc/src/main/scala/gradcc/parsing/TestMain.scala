@@ -23,8 +23,8 @@ import commons.{Fatal, NonFatal, Reporter, Success}
   //      |let main = newMain fs net in
   //      |main.main()
   //      |""".stripMargin
-  val str = "let g = fn (x: Unit) f x x in mod (r) { a = x, b = y }"
-  val pipeline = new Scanner().andThen(new Parser())
+  val str = "let g = fn (x: Unit, y: Reg^{x, a}, foo: Reg^) f x x in mod (r) { a = x, b = y }"
+  val pipeline = new Scanner().andThen(new ParserPhase())
   val res = pipeline.run((str, "Example.gradcc"), reporter)
   println(
     res match

@@ -9,29 +9,29 @@ import gradcc.lang.{Keyword, Operator}
 import scala.collection.immutable.ArraySeq
 import scala.util.parsing.combinator.Parsers
 
-class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
+class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
 
   override type Elem = GradCCToken
 
   // ----- Syntax primitives --------------------------
 
-  private val lower = acceptMatch("identifier", {
+  private val lower = acceptMatch("[identifier]", {
     case tok: LowerWordToken => tok
   })
 
-  private val upper = acceptMatch("type identifier", {
+  private val upper = acceptMatch("[type identifier]", {
     case tok: UpperWordToken => tok
   })
 
-  private def kw(kw: Keyword) = acceptMatch(s"'${kw.str}'", {
+  private def kw(kw: Keyword) = acceptMatch(s"[${kw.str}]", {
     case tok: KeywordToken if tok.keyword == kw => tok
   })
 
-  private def op(op: Operator) = acceptMatch(s"'${op.str}'", {
+  private def op(op: Operator) = acceptMatch(s"[${op.str}]", {
     case tok: OperatorToken if tok.operator == op => tok
   })
 
-  private lazy val eof = acceptMatch("end of file", {
+  private lazy val eof = acceptMatch("[eof]", {
     case _: EndOfFileToken => ()
   })
 
@@ -56,10 +56,10 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
     case KeywordToken(kw, pos) => Cap(pos)
   }
 
-  private lazy val variable: P[Variable] = identifier ||| cap
+  private lazy val variable: P[Variable] = identifier OR cap
 
-  private lazy val reg: P[Reg] = kw(RegKw).map(tok => Reg(tok.pos))
-  private lazy val field: P[Field] = identifier ||| reg
+  private lazy val reg: P[Reg] = kw(RegLKw).map(tok => Reg(tok.pos))
+  private lazy val field: P[Field] = identifier OR reg
 
   private lazy val path: P[Path] = rep1sep(identifier, dot).map {
     case List(h) => h
@@ -92,7 +92,7 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
     case openB ~ _ => UnitLiteral(openB.pos)
   }
 
-  private lazy val value: P[Value] = box ||| abs ||| recordLit ||| unitLit
+  private lazy val value: P[Value] = box OR abs OR recordLit OR unitLit
 
   private lazy val unbox: P[Unbox] = (kw(UnboxKw) ~ path ~ kw(Using) ~ explicitCaptureSet).map {
     case unbox ~ p ~ _ ~ capSet => Unbox(capSet, p, unbox.pos)
@@ -129,7 +129,7 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
   }
 
   private lazy val term: P[Term] =
-    path ||| value ||| app ||| unbox ||| let ||| region ||| deref ||| assignment ||| ref ||| modif ||| parenthesizedTerm
+    path OR value OR app OR unbox OR let OR region OR deref OR assignment OR ref OR modif OR parenthesizedTerm
 
   private lazy val parenthesizedTerm: P[Term] = (openParenth ~ term ~ closeParenth).map {
     case _ ~ t ~ _ => t
@@ -151,11 +151,11 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
 
   private lazy val unitType: P[UnitType] = kw(UnitKw).map(unit => UnitType(unit.pos))
 
-  private lazy val refType: P[RefType] = (kw(RefKw) ~ typeShape).map {
+  private lazy val refType: P[RefType] = (kw(RefUKw) ~ typeShape).map {
     case ref ~ referenced => RefType(referenced, ref.pos)
   }
 
-  private lazy val regType: P[RegType] = kw(RegKw).map(reg => RegType(reg.pos))
+  private lazy val regType: P[RegType] = kw(RegUKw).map(reg => RegType(reg.pos))
 
   private lazy val recordType: P[RecordType] =
     (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(identifier ~ colon ~ tpe) ~ closeBrace).map {
@@ -171,7 +171,7 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
       }
     }
 
-  private lazy val typeShape: P[TypeShape] = topType ||| depType ||| boxType ||| unitType ||| refType ||| regType ||| recordType
+  private lazy val typeShape: P[TypeShape] = topType OR depType OR boxType OR unitType OR refType OR regType OR recordType
 
   private lazy val tpe: P[Type] = (typeShape ~ opt(op(Hat) ~ opt(explicitCaptureSet))).map {
     case shape ~ Some(_ ~ Some(explicitCapSet)) =>
@@ -191,9 +191,11 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
     val interestingTokens = filterIsKindedToken(in)
     val reader = ParsingReader.from(interestingTokens)
     (term ~ eof).apply(reader) match {
-      case Success(result ~ (), remaining) =>
-        result
-      case Failure(msg, remaining) => reporter.fatal(msg, remaining.first.pos)
+      case Success(result ~ (), remaining) => result
+      case Failure(rawMsg, remaining) =>
+        val expectedTokens = extractExpectedTokensList(rawMsg)
+        val msg = s"unexpected token: '${remaining.first.str}', expected one of: " + expectedTokens.mkString("'", "', '", "'")
+        reporter.fatal(msg, remaining.first.pos)
       case Error(msg, _) => throw RuntimeException(msg)
     }
   }
@@ -207,6 +209,38 @@ class Parser extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
     }
     b.result()
   }
+
+  // HACK (for better error messages)
+  // This method is mostly copied from the `|||` combinator in Scala parser combinators library
+  extension[T] (p: Parser[T]) private infix def OR [U >: T](q0: => Parser[U]): Parser[U] = new Parser[U] {
+    lazy val q: Parser[U] = q0 // lazy argument
+    def apply(in: Input): ParseResult[U] = {
+      val res1 = p(in)
+      val res2 = q(in)
+
+      ((res1, res2): @unchecked) match {
+        case (s1 @ Success(_, next1), s2 @ Success(_, next2)) =>
+          if (next2.pos < next1.pos || next2.pos == next1.pos) s1 else s2
+        case (s1 @ Success(_, _), _) => s1
+        case (_, s2 @ Success(_, _)) => s2
+        case (e1 @ Error(_, _), _) => e1
+        case (f1 @ Failure(msg1, next1), f2 @ Failure(msg2, next2)) if next1.pos == next2.pos =>
+          Failure(combineExpectedTokens(msg1, msg2), next1)
+        case (f1 @ Failure(_, next1), ns2 @ NoSuccess(_, next2)) =>
+          if (next2.pos < next1.pos || next2.pos == next1.pos) f1 else ns2
+      }
+    }
+    override def toString = "|||"
+  }
+
+  private def combineExpectedTokens(l: String, r: String): String = {
+    val lTokens = extractExpectedTokensList(l)
+    val rTokens = extractExpectedTokensList(r)
+    (lTokens ++ rTokens).mkString("[", ",", "]")
+  }
+
+  private def extractExpectedTokensList(str: String): Array[String] =
+    str.dropWhile(_ != '[').tail.takeWhile(_ != ']').split(',')
 
   case class ParsingException(msg: String) extends RuntimeException(msg)
 
