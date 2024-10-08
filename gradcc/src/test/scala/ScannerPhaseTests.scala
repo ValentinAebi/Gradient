@@ -1,9 +1,9 @@
 import commons.Reporter
-import gradcc.parsing.Scanner
+import gradcc.parsing.ScannerPhase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.junit.jupiter.api.Test
 
-class ScannerTests {
+class ScannerPhaseTests {
 
   @Test def simpleScannerTest(): Unit = {
     val code =
@@ -12,7 +12,7 @@ class ScannerTests {
         |         bar x y
         |""".stripMargin
     val fakeFilename = "Example.gradcc"
-    val scanner = Scanner()
+    val scanner = ScannerPhase()
     val reporter = Reporter()
     val actual = scanner.run((code, fakeFilename), reporter).resultOrThrow()
     val expected = List(

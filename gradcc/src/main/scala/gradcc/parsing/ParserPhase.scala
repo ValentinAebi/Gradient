@@ -1,15 +1,16 @@
 package gradcc.parsing
 
 import commons.{Reporter, SimplePhase}
-import gradcc.*
+import gradcc.asts.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, Operator}
+import gradcc.*
 
 import scala.collection.immutable.ArraySeq
 import scala.util.parsing.combinator.Parsers
 
-class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
+final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
 
   override type Elem = GradCCToken
 
@@ -61,9 +62,12 @@ class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers
   private lazy val reg: P[Reg] = kw(RegLKw).map(tok => Reg(tok.pos))
   private lazy val field: P[Field] = identifier OR reg
 
-  private lazy val path: P[Path] = rep1sep(identifier, dot).map {
-    case List(h) => h
-    case h :: t => CompoundPath(h, t, h.position)
+  private lazy val path: P[Path] = (identifier ~ rep(dot ~ lower)).map {
+    case root ~ selects => {
+      selects.foldLeft[Path](root) {
+        case (r, dotTok ~ fldTok) => Select(r, fldTok.str, dotTok.pos)
+      }
+    }
   }
 
   private lazy val box: P[Box] = (kw(BoxKw) ~ path).map {
@@ -135,29 +139,25 @@ class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers
     case _ ~ t ~ _ => t
   }
 
-  private lazy val typeId: P[TypeId] = upper.map {
-    case UpperWordToken(str, pos) => TypeId(str, pos)
+  private lazy val topType: P[TopTypeTree] = kw(TopKw).map(top => TopTypeTree(top.pos))
+
+  private lazy val depType: P[AbsTypeTree] = (kw(DepKw) ~ openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ tpe).map {
+    case dep ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, dep.pos)
   }
 
-  private lazy val topType: P[TopType] = kw(TopKw).map(top => TopType(top.pos))
-
-  private lazy val depType: P[DepType] = (kw(DepKw) ~ openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ tpe).map {
-    case dep ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => DepType(param, paramType, bodyType, dep.pos)
+  private lazy val boxType: P[BoxTypeTree] = (kw(BoxKw) ~ tpe).map {
+    case box ~ boxed => BoxTypeTree(boxed, box.pos)
   }
 
-  private lazy val boxType: P[BoxType] = (kw(BoxKw) ~ tpe).map {
-    case box ~ boxed => BoxType(boxed, box.pos)
+  private lazy val unitType: P[UnitTypeTree] = kw(UnitKw).map(unit => UnitTypeTree(unit.pos))
+
+  private lazy val refType: P[RefTypeTree] = (kw(RefUKw) ~ typeShape).map {
+    case ref ~ referenced => RefTypeTree(referenced, ref.pos)
   }
 
-  private lazy val unitType: P[UnitType] = kw(UnitKw).map(unit => UnitType(unit.pos))
+  private lazy val regType: P[RegTypeTree] = kw(RegUKw).map(reg => RegTypeTree(reg.pos))
 
-  private lazy val refType: P[RefType] = (kw(RefUKw) ~ typeShape).map {
-    case ref ~ referenced => RefType(referenced, ref.pos)
-  }
-
-  private lazy val regType: P[RegType] = kw(RegUKw).map(reg => RegType(reg.pos))
-
-  private lazy val recordType: P[RecordType] =
+  private lazy val recordType: P[RecordTypeTree] =
     (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(identifier ~ colon ~ tpe) ~ closeBrace).map {
       case idToksOpt ~ openB ~ fieldsToks ~ _ => {
         val idOpt = idToksOpt.map {
@@ -167,23 +167,23 @@ class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers
           case fldName ~ _ ~ fldType => (fldName, fldType)
         }
         val pos = idOpt.map(_.position).getOrElse(openB.pos)
-        RecordType(fields, idOpt, pos)
+        RecordTypeTree(fields, idOpt, pos)
       }
     }
 
-  private lazy val typeShape: P[TypeShape] = topType OR depType OR boxType OR unitType OR refType OR regType OR recordType
+  private lazy val typeShape: P[TypeShapeTree] = topType OR depType OR boxType OR unitType OR refType OR regType OR recordType
 
-  private lazy val tpe: P[Type] = (typeShape ~ opt(op(Hat) ~ opt(explicitCaptureSet))).map {
+  private lazy val tpe: P[TypeTree] = (typeShape ~ opt(op(Hat) ~ opt(explicitCaptureSet))).map {
     case shape ~ Some(_ ~ Some(explicitCapSet)) =>
-      Type(shape, Some(explicitCapSet), shape.position)
+      TypeTree(shape, Some(explicitCapSet), shape.position)
     case shape ~ Some(hat ~ None) =>
-      Type(shape, Some(ImplicitCaptureSet(hat.pos)), shape.position)
+      TypeTree(shape, Some(ImplicitCaptureSetTree(hat.pos)), shape.position)
     case shape ~ None =>
-      Type(shape, None, shape.position)
+      TypeTree(shape, None, shape.position)
   }
 
-  private lazy val explicitCaptureSet: P[ExplicitCaptureSet] = (openBrace ~ repsep(path, comma) ~ closeBrace).map {
-    case openB ~ capPaths ~ _ => ExplicitCaptureSet(capPaths, openB.pos)
+  private lazy val explicitCaptureSet: P[ExplicitCaptureSetTree] = (openBrace ~ repsep(path, comma) ~ closeBrace).map {
+    case openB ~ capPaths ~ _ => ExplicitCaptureSetTree(capPaths, openB.pos)
   }
 
 
@@ -212,24 +212,26 @@ class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers
 
   // HACK (for better error messages)
   // This method is mostly copied from the `|||` combinator in Scala parser combinators library
-  extension[T] (p: Parser[T]) private infix def OR [U >: T](q0: => Parser[U]): Parser[U] = new Parser[U] {
+  extension [T](p: Parser[T]) private infix def OR[U >: T](q0: => Parser[U]): Parser[U] = new Parser[U] {
     lazy val q: Parser[U] = q0 // lazy argument
+
     def apply(in: Input): ParseResult[U] = {
       val res1 = p(in)
       val res2 = q(in)
 
       ((res1, res2): @unchecked) match {
-        case (s1 @ Success(_, next1), s2 @ Success(_, next2)) =>
+        case (s1@Success(_, next1), s2@Success(_, next2)) =>
           if (next2.pos < next1.pos || next2.pos == next1.pos) s1 else s2
-        case (s1 @ Success(_, _), _) => s1
-        case (_, s2 @ Success(_, _)) => s2
-        case (e1 @ Error(_, _), _) => e1
-        case (f1 @ Failure(msg1, next1), f2 @ Failure(msg2, next2)) if next1.pos == next2.pos =>
+        case (s1@Success(_, _), _) => s1
+        case (_, s2@Success(_, _)) => s2
+        case (e1@Error(_, _), _) => e1
+        case (f1@Failure(msg1, next1), f2@Failure(msg2, next2)) if next1 == next2 =>
           Failure(combineExpectedTokens(msg1, msg2), next1)
-        case (f1 @ Failure(_, next1), ns2 @ NoSuccess(_, next2)) =>
+        case (f1@Failure(_, next1), ns2@NoSuccess(_, next2)) =>
           if (next2.pos < next1.pos || next2.pos == next1.pos) f1 else ns2
       }
     }
+
     override def toString = "|||"
   }
 

@@ -10,7 +10,7 @@ type Code = String
 type Filename = String
 
 
-final class Scanner extends SimplePhase[(Code, Filename), Seq[GradCCToken]]("Scanner") {
+final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]("Scanner") {
 
   private val commentMatcher: Matcher = (str: String, pos: Position) =>
     if str.startsWith(Conventions.commentMarker) then Some(CommentToken(str, pos)) else None

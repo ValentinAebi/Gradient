@@ -42,6 +42,26 @@ final class ComposedPhase[In, Mid, Out](firstPhase: Phase[In, Mid], secondPhase:
 
 }
 
+final class MultiPhase[In, Out](unaryPhase: Phase[In, Out]) extends Phase[Seq[In], Seq[Out]] {
+  override val phaseName: String = unaryPhase.phaseName
+
+  override def run(in: Seq[In], reporter: Reporter): PhaseResult[Seq[Out]] = {
+    in.toList.foldRight[PhaseResult[List[Out]]](Success(Nil)) {
+      case (_, fatal: Fatal) => fatal
+      case (unaryIn, accRes) => {
+        val unaryOut = unaryPhase.run(unaryIn, reporter)
+        (unaryOut, accRes) match {
+          case (Success(out), Success(outs)) => Success(out :: outs)
+          case (NonFatal, _) => NonFatal
+          case (_, NonFatal) => NonFatal
+          case (fatal: Fatal, _) => fatal
+          case _ => assert(false)
+        }
+      }
+    }
+  }
+}
+
 sealed trait PhaseResult[+T] {
   def resultOrThrow(): T
 }
