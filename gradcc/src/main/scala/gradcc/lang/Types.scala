@@ -1,27 +1,38 @@
 package gradcc.lang
 
+import gradcc.asts.UniqueVarId
+
 case class Type(shape: ShapeType, captureSet: Set[Capturable])
 
 sealed trait Capturable {
-  def isRootedIn(varId: String): Boolean
+  def isRootedIn(varId: UniqueVarId): Boolean
 }
 
-case class CapabilityPath(root: String, selects: Seq[String]) extends Capturable {
-  override def isRootedIn(varId: String): Boolean = (varId == root)
+case class CapabilityPath(root: UniqueVarId, selects: Seq[String]) extends Capturable {
+  override def isRootedIn(varId: UniqueVarId): Boolean = (varId == root)
+  
+  def isPrefixOf(p: CapabilityPath): Boolean = {
+    val CapabilityPath(pRoot, pSelects) = p
+    root == pRoot && pSelects.startsWith(selects)
+  }
 }
 
 case object RootCapability extends Capturable {
-  override def isRootedIn(varId: String): Boolean = false
+  override def isRootedIn(varId: UniqueVarId): Boolean = false
 }
 
 sealed trait ShapeType {
   infix def ^(captureSet: Set[Capturable]): Type = Type(this, captureSet)
 }
 
-case object TopType extends ShapeType
-case class AbsType(varId: String, varType: Type, resType: Type) extends ShapeType
-case class BoxType(boxed: Type) extends ShapeType
-case object UnitType extends ShapeType
-case class RefType(referenced: ShapeType) extends ShapeType
-case object RegionType extends ShapeType
-case class RecordType(fields: Map[String, Type], selfRef: Option[String]) extends ShapeType
+case object TopShape extends ShapeType
+case class AbsShape(varId: UniqueVarId, varType: Type, resType: Type) extends ShapeType
+case class BoxShape(boxed: Type) extends ShapeType
+case object UnitShape extends ShapeType
+case class RefShape(referenced: ShapeType) extends ShapeType
+case object RegionShape extends ShapeType
+case class RecordShape(fields: Map[RecordField, Type], selfRef: Option[UniqueVarId]) extends ShapeType
+
+sealed trait RecordField
+case class RegularField(id: String) extends RecordField
+case object RegionField extends RecordField

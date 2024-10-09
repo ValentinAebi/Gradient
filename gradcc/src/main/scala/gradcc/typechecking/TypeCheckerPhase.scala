@@ -1,17 +1,16 @@
 package gradcc.typechecking
 
-import commons.{Position, Reporter, SimplePhase}
-import gradcc.asts
-import gradcc.asts.*
+import commons.{Reporter, SimplePhase}
+import gradcc.asts.UniqueVarId
+import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
+import gradcc.typechecking.SubtypingRelation.subtypeOf
+import gradcc.{asts, lang}
 
 import scala.collection.mutable
 
 
 final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typechecker") {
-
-  private type TermsTypes = mutable.Map[Term, Option[Type]]
-  private type Store = Map[String, Type]
 
   override protected def runImpl(in: Term, reporter: Reporter): Map[Term, Type] = {
     val types: TermsTypes = mutable.Map.empty
@@ -24,57 +23,61 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
 
   private def computeTypes(t: Term)(using ctx: Ctx): Option[Type] = ctx.types.getOrElseUpdate(t, {
     import ctx.*
-
-    val inferredType = ctx.types.getOrElseUpdate(t, {
-      t match {
-        case Identifier(id, position) => store.get(id).orElse(reportError(s"not found: $id", position))
-        case Cap(position) => ???
-        case Select(owner, fieldId, position) =>
-          computeTypes(owner).flatMap {
-            case Type(RecordType(fields, selfRef), captureSet) if fields.contains(fieldId) =>
-              fields.get(fieldId)
-            case otherType => reportError(
-              s"no field named '$fieldId' found in owner type $otherType", position)
-          }
-        case Box(boxed, position) => ???
-        case abs@Abs(varIdent, varTypeTree, body, position) => {
-          val varId = varIdent.id
-          val varType = mkType(varTypeTree)
-          computeTypes(body)(using ctx.withNewBinding(varId, varType)).map { bodyType =>
-            AbsType(varId, varType, bodyType) ^ cv(abs)
-          }
+    t match {
+      case Identifier(id, position) => store.get(id).orElse(reportError(s"not found: $id", position))
+      case Cap(position) => ???
+      case Select(owner, fieldId, position) =>
+        computeTypes(owner).flatMap {
+          case Type(RecordShape(fields, selfRef), captureSet) if fields.contains(RegularField(fieldId)) =>
+            fields.get(RegularField(fieldId))
+          case otherType => reportError(
+            s"no field named '$fieldId' found in owner type $otherType", position)
         }
-        case RecordLiteral(fields, position) => ???
-        case UnitLiteral(position) => Some(UnitType ^ Set.empty)
-        case App(callee, arg, position) => ???
-        case Unbox(captureSet, boxed, position) => ???
-        case Let(varId, value, body, position) => ???
-        case Region(position) => Some(RegionType ^ Set(RootCapability))
-        case Deref(ref, position) => ???
-        case Assign(ref, newVal, position) => ???
-        case Ref(regionCap, initVal, position) => ???
-        case Modif(regionCap, fields, position) => ???
+      case Box(boxed, position) => ???
+      case abs@Abs(varIdent, varTypeTree, body, position) => {
+        val varId = varIdent.id
+        val varType = mkType(varTypeTree)
+        computeTypes(body)(using ctx.withNewBinding(varId, varType)).map { bodyType =>
+          AbsShape(varId, varType, bodyType) ^ cv(abs)
+        }
       }
-    })
-    ???
-  })
+      case recordLit@RecordLiteral(fields, selfRef, position) => Some(
+        RecordShape(
+          fields.flatMap((fld, p) => computeTypes(p).map((mkRecordField(fld), _))).toMap,
+          selfRef.map(_.id)
+        ) ^ cv(recordLit)
+      )
+      case UnitLiteral(position) => Some(UnitShape ^ Set.empty)
+      case App(callee, arg, position) => {
+        (computeTypes(callee), computeTypes(arg)) match {
+          case (None, _) => None
+          case (_, None) => None
+          case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) => {
+            val argMatchesParam = argType.subtypeOf(varType)
+            ???
+          }
+          case (Some(callerType), Some(argType)) => ???
 
-  private case class Ctx(store: Store, types: TermsTypes, reporter: Reporter) {
-
-    def withNewBinding(varName: String, varType: Type): Ctx = copy(store = store + (varName -> varType))
-
-    def reportError(msg: String, pos: Position): None.type = {
-      reporter.error(msg, pos)
-      None
+        }
+      }
+      case Unbox(captureSet, boxed, position) => ???
+      case Let(varId, value, body, position) => ???
+      case Region(position) => Some(RegionShape ^ Set(RootCapability))
+      case Deref(ref, position) => ???
+      case Assign(ref, newVal, position) => ???
+      case Ref(regionCap, initVal, position) => ???
+      case Modif(regionCap, fields, position) => ???
     }
-  }
+  })
 
   private def cv(term: Term): Set[Capturable] = term match {
     case p: Path => Set(mkCapabilityPath(p))
     case Cap(position) => Set(RootCapability)
     case Box(boxed, position) => Set.empty
     case Abs(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
-    case RecordLiteral(fields, position) => fields.flatMap((_, p) => cv(p)).toSet
+    case RecordLiteral(fields, selfRef, position) =>
+      fields.flatMap((_, p) => cv(p)).toSet
+        .filterNot(capturable => selfRef.exists(sr => capturable.isRootedIn(sr.id)))
     case UnitLiteral(position) => Set.empty
     case App(callee, arg, position) => cv(callee) ++ cv(arg)
     case Unbox(captureSet, boxed, position) => mkCaptureSet(captureSet) ++ cv(boxed)
@@ -91,21 +94,26 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case Modif(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
   }
 
+  private def mkRecordField(fld: Field): RecordField = fld match {
+    case NamedField(fieldName, position) => RegularField(fieldName)
+    case Reg(position) => RegionField
+  }
+
   private def mkType(typeTree: TypeTree): Type = Type(
     mkShape(typeTree.shape),
     typeTree.captureSet.map(mkCaptureSet).getOrElse(Set.empty)
   )
 
   private def mkShape(typeShapeTree: TypeShapeTree): ShapeType = typeShapeTree match {
-    case TopTypeTree(position) => TopType
+    case TopTypeTree(position) => TopShape
     case AbsTypeTree(varId, varType, bodyType, position) =>
-      AbsType(varId.id, mkType(varType), mkType(bodyType))
-    case BoxTypeTree(boxedType, position) => BoxType(mkType(boxedType))
-    case UnitTypeTree(position) => UnitType
-    case RefTypeTree(referencedType, position) => RefType(mkShape(referencedType))
-    case RegTypeTree(position) => RegionType
-    case RecordTypeTree(fieldsInOrder, selfRef, position) => RecordType(
-      fieldsInOrder.map((id, typeTree) => (id.id, mkType(typeTree))).toMap,
+      AbsShape(varId.id, mkType(varType), mkType(bodyType))
+    case BoxTypeTree(boxedType, position) => BoxShape(mkType(boxedType))
+    case UnitTypeTree(position) => UnitShape
+    case RefTypeTree(referencedType, position) => RefShape(mkShape(referencedType))
+    case RegTypeTree(position) => RegionShape
+    case RecordTypeTree(fieldsInOrder, selfRef, position) => RecordShape(
+      fieldsInOrder.map((fld, typeTree) => (mkRecordField(fld), mkType(typeTree))).toMap,
       selfRef.map(_.id)
     )
   }
@@ -116,13 +124,16 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
   }
 
   private def mkCapabilityPath(capPath: Path): CapabilityPath = {
-    val root :: selects = flattenSelectsReversed(capPath).reverse
-    CapabilityPath(root, selects)
+    val (root, selectsReversed) = flattenSelectsReversed(capPath)
+    CapabilityPath(root, selectsReversed.reverse)
   }
 
-  private def flattenSelectsReversed(p: Path): List[String] = p match {
-    case Identifier(id, position) => List(id)
-    case Select(root, select, position) => select :: flattenSelectsReversed(root)
+  private def flattenSelectsReversed(p: Path): (UniqueVarId, List[String]) = p match {
+    case Identifier(id, position) => (id, Nil)
+    case Select(root, select, position) => {
+      val (id, previousSelects) = flattenSelectsReversed(root)
+      (id, select :: previousSelects)
+    }
   }
 
 }

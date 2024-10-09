@@ -1,7 +1,7 @@
 package gradcc.parsing
 
 import commons.{Reporter, SimplePhase}
-import gradcc.asts.*
+import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, Operator}
@@ -59,8 +59,13 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
 
   private lazy val variable: P[Variable] = identifier OR cap
 
+  private lazy val namedField: P[NamedField] = lower.map {
+    case LowerWordToken(str, pos) => NamedField(str, pos)
+  }
+  
   private lazy val reg: P[Reg] = kw(RegLKw).map(tok => Reg(tok.pos))
-  private lazy val field: P[Field] = identifier OR reg
+  
+  private lazy val field: P[Field] = namedField OR reg
 
   private lazy val path: P[Path] = (identifier ~ rep(dot ~ lower)).map {
     case root ~ selects => {
@@ -86,9 +91,11 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
     }
   }
 
-  private lazy val recordLit: P[RecordLiteral] = (openBrace ~ rep(field ~ equal ~ path) ~ closeBrace).map {
-    case openBr ~ fields ~ _ => RecordLiteral(fields.map {
+  private lazy val recordLit: P[RecordLiteral] = (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ (openBrace ~ rep(field ~ equal ~ path) ~ closeBrace)).map {
+    case optSelfRef ~ (openBr ~ fields ~ _) => RecordLiteral(fields.map {
       case fld ~ _ ~ p => (fld, p)
+    }, optSelfRef.map {
+      case _ ~ id ~ _ => id
     }, openBr.pos)
   }
 
@@ -158,7 +165,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
   private lazy val regType: P[RegTypeTree] = kw(RegUKw).map(reg => RegTypeTree(reg.pos))
 
   private lazy val recordType: P[RecordTypeTree] =
-    (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(identifier ~ colon ~ tpe) ~ closeBrace).map {
+    (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(namedField ~ colon ~ tpe) ~ closeBrace).map {
       case idToksOpt ~ openB ~ fieldsToks ~ _ => {
         val idOpt = idToksOpt.map {
           case _ ~ id ~ _ => id
