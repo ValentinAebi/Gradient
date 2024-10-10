@@ -1,16 +1,18 @@
 package commons
 
-import java.io.{ByteArrayOutputStream, PrintStream, StringWriter}
+import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.collection.mutable.ListBuffer
 
 
-class Reporter {
+final class Reporter {
 
   private val errors: ListBuffer[Entry] = ListBuffer.empty
   private val warnings: ListBuffer[Entry] = ListBuffer.empty
   private val infos: ListBuffer[Entry] = ListBuffer.empty
 
   private var stopFlag: Boolean = false
+
+  def somethingToReport: Boolean = errors.nonEmpty || warnings.nonEmpty || infos.nonEmpty
 
   def fatal(msg: String, pos: Option[Position]): Nothing = {
     stopFlag = true

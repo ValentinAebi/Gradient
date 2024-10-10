@@ -15,6 +15,9 @@ case class CapabilityPath(root: UniqueVarId, selects: Seq[String]) extends Captu
     val CapabilityPath(pRoot, pSelects) = p
     root == pRoot && pSelects.startsWith(selects)
   }
+  
+  def extendedWith(newSelects: Seq[String]): CapabilityPath = copy(selects = selects ++ newSelects)
+  
 }
 
 case object RootCapability extends Capturable {

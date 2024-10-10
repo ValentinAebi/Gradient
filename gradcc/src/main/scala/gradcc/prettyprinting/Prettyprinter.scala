@@ -126,7 +126,7 @@ def Prettyprinter(p: TermsProvider): SimplePhase[p.Term, String] = new SimplePha
         sepList(capturedVarsInOrder, ", ")(pp)
         add(" }")
       case p.ImplicitCaptureSetTree(position) =>
-        add("^")
+        add("^{ ").add(CapKw).add(" }")
     }
   }
 
