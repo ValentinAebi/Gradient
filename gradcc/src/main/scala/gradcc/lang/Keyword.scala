@@ -3,7 +3,6 @@ package gradcc.lang
 enum Keyword(val str: String) {
   case BoxKw extends Keyword("box")
   case CapKw extends Keyword("cap")
-  case DepKw extends Keyword("dep")
   case FnKw extends Keyword("fn")
   case InKw extends Keyword("in")
   case LetKw extends Keyword("let")

@@ -1,6 +1,6 @@
 package commons
 
-import java.io.PrintStream
+import java.io.{ByteArrayOutputStream, PrintStream, StringWriter}
 import scala.collection.mutable.ListBuffer
 
 
@@ -54,6 +54,13 @@ class Reporter {
     dumpList(ps, infos, "info(s)")
   }
 
+  def getStringReport: String = {
+    val bytes = new ByteArrayOutputStream()
+    val ps = new PrintStream(bytes)
+    dump(ps)
+    bytes.toString
+  }
+
   private def dumpList(ps: PrintStream, ls: ListBuffer[Entry], reportType: String): Unit = {
     ps.println(s"${ls.size} $reportType:")
     for (entry <- ls) {
@@ -62,7 +69,7 @@ class Reporter {
   }
 
   private final case class Entry(msg: String, pos: Option[Position]) {
-    override def toString: String = s"[$pos] $msg"
+    override def toString: String = s"[${pos.getOrElse("??")}] $msg"
   }
 
 }

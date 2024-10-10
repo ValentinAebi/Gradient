@@ -31,7 +31,7 @@ case class BoxShape(boxed: Type) extends ShapeType
 case object UnitShape extends ShapeType
 case class RefShape(referenced: ShapeType) extends ShapeType
 case object RegionShape extends ShapeType
-case class RecordShape(fields: Map[RecordField, Type], selfRef: Option[UniqueVarId]) extends ShapeType
+case class RecordShape(selfRef: Option[UniqueVarId], fields: Map[RecordField, Type]) extends ShapeType
 
 sealed trait RecordField
 case class RegularField(id: String) extends RecordField

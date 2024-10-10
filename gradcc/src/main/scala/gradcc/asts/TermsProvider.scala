@@ -8,6 +8,12 @@ trait TermsProvider {
   
   type VarId
 
+  def str(varId: VarId): String
+
+  sealed trait Ast {
+    val position: Position
+  }
+
   sealed trait Term extends Ast
 
   sealed trait Variable extends Term
@@ -23,10 +29,10 @@ trait TermsProvider {
   sealed trait Value extends Term
   case class Box(boxed: Path, override val position: Position) extends Value
   case class Abs(varId: Identifier, tpe: TypeTree, body: Term, override val position: Position) extends Value
-  case class RecordLiteral(fields: Seq[(Field, Path)], selfRef: Option[Identifier], override val position: Position) extends Value
+  case class RecordLiteral(selfRef: Option[Identifier], fields: Seq[(Field, Path)], override val position: Position) extends Value
   case class UnitLiteral(override val position: Position) extends Value
   
-  case class App(callee: Term, arg: Term, override val position: Position) extends Term
+  case class App(callee: Path, arg: Path, override val position: Position) extends Term
   case class Unbox(captureSet: CaptureSetTree, boxed: Path, override val position: Position) extends Term
   case class Let(varId: Identifier, value: Term, body: Term, override val position: Position) extends Term
   case class Region(override val position: Position) extends Term
@@ -45,7 +51,7 @@ trait TermsProvider {
   case class UnitTypeTree(override val position: Position) extends TypeShapeTree
   case class RefTypeTree(referencedType: TypeShapeTree, override val position: Position) extends TypeShapeTree
   case class RegTypeTree(override val position: Position) extends TypeShapeTree
-  case class RecordTypeTree(fieldsInOrder: Seq[(NamedField, TypeTree)], selfRef: Option[Identifier], override val position: Position) extends TypeShapeTree
+  case class RecordTypeTree(selfRef: Option[Identifier], fieldsInOrder: Seq[(NamedField, TypeTree)], override val position: Position) extends TypeShapeTree
 
   sealed trait CaptureSetTree extends Ast
   case class ExplicitCaptureSetTree(capturedVarsInOrder: Seq[Path], override val position: Position) extends CaptureSetTree

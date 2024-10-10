@@ -1,11 +1,11 @@
 package gradcc.parsing
 
 import commons.{Reporter, SimplePhase}
+import gradcc.*
 import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, Operator}
-import gradcc.*
 
 import scala.collection.immutable.ArraySeq
 import scala.util.parsing.combinator.Parsers
@@ -62,9 +62,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
   private lazy val namedField: P[NamedField] = lower.map {
     case LowerWordToken(str, pos) => NamedField(str, pos)
   }
-  
+
   private lazy val reg: P[Reg] = kw(RegLKw).map(tok => Reg(tok.pos))
-  
+
   private lazy val field: P[Field] = namedField OR reg
 
   private lazy val path: P[Path] = (identifier ~ rep(dot ~ lower)).map {
@@ -92,11 +92,15 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
   }
 
   private lazy val recordLit: P[RecordLiteral] = (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ (openBrace ~ rep(field ~ equal ~ path) ~ closeBrace)).map {
-    case optSelfRef ~ (openBr ~ fields ~ _) => RecordLiteral(fields.map {
-      case fld ~ _ ~ p => (fld, p)
-    }, optSelfRef.map {
-      case _ ~ id ~ _ => id
-    }, openBr.pos)
+    case optSelfRef ~ (openBr ~ fields ~ _) => RecordLiteral(
+      optSelfRef.map {
+        case _ ~ id ~ _ => id
+      },
+      fields.map {
+        case fld ~ _ ~ p => (fld, p)
+      },
+      openBr.pos
+    )
   }
 
   private lazy val unitLit: P[UnitLiteral] = (openParenth ~ closeParenth).map {
@@ -127,9 +131,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
         }, mod.pos)
     }
 
-  private lazy val app: P[App] = rep1(path).map(paths =>
-    paths.reduceLeft[Term]((accCaller, arg) => App(accCaller, arg, accCaller.position)).asInstanceOf[App]
-  )
+  private lazy val app: P[App] = (path ~ path).map {
+    case callee ~ arg => App(callee, arg, callee.position)
+  }
 
   private lazy val assignment: P[Assign] = (path ~ colon ~ equal ~ path).map {
     case lhs ~ _ ~ _ ~ rhs => Assign(lhs, rhs, lhs.position)
@@ -148,8 +152,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
 
   private lazy val topType: P[TopTypeTree] = kw(TopKw).map(top => TopTypeTree(top.pos))
 
-  private lazy val depType: P[AbsTypeTree] = (kw(DepKw) ~ openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ tpe).map {
-    case dep ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, dep.pos)
+  private lazy val depType: P[AbsTypeTree] = (kw(FnKw) ~ openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ tpe).map {
+    case fn ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, fn.pos)
   }
 
   private lazy val boxType: P[BoxTypeTree] = (kw(BoxKw) ~ tpe).map {
@@ -174,7 +178,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
           case fldName ~ _ ~ fldType => (fldName, fldType)
         }
         val pos = idOpt.map(_.position).getOrElse(openB.pos)
-        RecordTypeTree(fields, idOpt, pos)
+        RecordTypeTree(idOpt, fields, pos)
       }
     }
 

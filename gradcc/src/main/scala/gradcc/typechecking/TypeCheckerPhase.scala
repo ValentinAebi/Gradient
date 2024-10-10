@@ -28,7 +28,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Cap(position) => ???
       case Select(owner, fieldId, position) =>
         computeTypes(owner).flatMap {
-          case Type(RecordShape(fields, selfRef), captureSet) if fields.contains(RegularField(fieldId)) =>
+          case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(RegularField(fieldId)) =>
             fields.get(RegularField(fieldId))
           case otherType => reportError(
             s"no field named '$fieldId' found in owner type $otherType", position)
@@ -41,10 +41,10 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           AbsShape(varId, varType, bodyType) ^ cv(abs)
         }
       }
-      case recordLit@RecordLiteral(fields, selfRef, position) => Some(
+      case recordLit@RecordLiteral(selfRef, fields, position) => Some(
         RecordShape(
+          selfRef.map(_.id),
           fields.flatMap((fld, p) => computeTypes(p).map((mkRecordField(fld), _))).toMap,
-          selfRef.map(_.id)
         ) ^ cv(recordLit)
       )
       case UnitLiteral(position) => Some(UnitShape ^ Set.empty)
@@ -75,7 +75,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case Cap(position) => Set(RootCapability)
     case Box(boxed, position) => Set.empty
     case Abs(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
-    case RecordLiteral(fields, selfRef, position) =>
+    case RecordLiteral(selfRef, fields, position) =>
       fields.flatMap((_, p) => cv(p)).toSet
         .filterNot(capturable => selfRef.exists(sr => capturable.isRootedIn(sr.id)))
     case UnitLiteral(position) => Set.empty
@@ -112,9 +112,9 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case UnitTypeTree(position) => UnitShape
     case RefTypeTree(referencedType, position) => RefShape(mkShape(referencedType))
     case RegTypeTree(position) => RegionShape
-    case RecordTypeTree(fieldsInOrder, selfRef, position) => RecordShape(
-      fieldsInOrder.map((fld, typeTree) => (mkRecordField(fld), mkType(typeTree))).toMap,
-      selfRef.map(_.id)
+    case RecordTypeTree(selfRef, fieldsInOrder, position) => RecordShape(
+      selfRef.map(_.id),
+      fieldsInOrder.map((fld, typeTree) => (mkRecordField(fld), mkType(typeTree))).toMap
     )
   }
 
