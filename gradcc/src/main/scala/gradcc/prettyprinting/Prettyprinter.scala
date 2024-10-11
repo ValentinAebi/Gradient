@@ -4,7 +4,7 @@ import commons.{Reporter, SimplePhase}
 import gradcc.asts.TermsProvider
 import gradcc.lang.Keyword.*
 
-def Prettyprinter(p: TermsProvider): SimplePhase[p.Term, String] = new SimplePhase[p.Term, String]("Prettyprinter"){
+def PrettyprinterPhase(p: TermsProvider): SimplePhase[p.Term, String] = new SimplePhase[p.Term, String]("Prettyprinter"){
 
   override protected def runImpl(in: p.Term, reporter: Reporter): String = {
     val isb = new IndentedStringBuilder()

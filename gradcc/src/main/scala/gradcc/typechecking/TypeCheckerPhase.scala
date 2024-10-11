@@ -1,7 +1,6 @@
 package gradcc.typechecking
 
-import commons.{Reporter, SimplePhase}
-import gradcc.asts.UniqueVarId
+import commons.{Position, Reporter, SimplePhase}
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 import gradcc.typechecking.SubtypingRelation.subtypeOf
@@ -24,7 +23,9 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
   private def computeTypes(t: Term)(using ctx: Ctx): Option[Type] = ctx.types.getOrElseUpdate(t, {
     import ctx.*
     t match {
-      case Identifier(id, position) => store.get(id).orElse(reportError(s"not found: $id", position))
+      case Identifier(id, position) =>
+        // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
+        store.apply(id)
       case Cap(position) => ???
       case Select(owner, fieldId, position) =>
         computeTypes(owner).flatMap {
@@ -37,7 +38,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case abs@Abs(varIdent, varTypeTree, body, position) => {
         val varId = varIdent.id
         val varType = mkType(varTypeTree)
-        computeTypes(body)(using ctx.withNewBinding(varId, varType)).map { bodyType =>
+        computeTypes(body)(using ctx.withNewBinding(varId, Some(varType))).map { bodyType =>
           AbsShape(varId, varType, bodyType) ^ cv(abs)
         }
       }
@@ -52,16 +53,28 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         (computeTypes(callee), computeTypes(arg)) match {
           case (None, _) => None
           case (_, None) => None
-          case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) => {
-            val argMatchesParam = argType.subtypeOf(varType)
-            ???
-          }
-          case (Some(callerType), Some(argType)) => ???
-
+          case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
+            mustBeAssignable(varType, argType, arg.position) {
+              Some(substitute(resType)(using Map(varId -> arg)))
+            }
+          case (Some(callerType), _) =>
+            reportError(s"$callerType is not callable", position)
         }
       }
       case Unbox(captureSet, boxed, position) => ???
-      case Let(varId, value, body, position) => ???
+      case Let(varId, value, body, position) => {
+        val valueType = computeTypes(value)
+        val bodyType = computeTypes(body)(using ctx.withNewBinding(varId.id, valueType))
+        bodyType.foreach { bodyType =>
+          if (varId.id.isFreeIn(bodyType)) {
+            reportError(
+              s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id.fullDescr}",
+              position
+            )
+          }
+        }
+        bodyType
+      }
       case Region(position) => Some(RegionShape ^ Set(RootCapability))
       case Deref(ref, position) => ???
       case Assign(ref, newVal, position) => ???
@@ -92,6 +105,17 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case Assign(ref, newVal, position) => cv(ref) ++ cv(newVal)
     case Ref(regionCap, initVal, position) => cv(regionCap) ++ cv(initVal)
     case Modif(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
+  }
+
+  private def mustBeAssignable(expectedType: Type, actualType: Type, pos: Position)
+                              (ifAssignable: => Option[Type])
+                              (using ctx: Ctx): Option[Type] = {
+    val isSub = actualType.subtypeOf(expectedType)
+    if (isSub) {
+      ifAssignable
+    } else {
+      ctx.reportError(s"type mismatch: expected $expectedType, but was $actualType", pos)
+    }
   }
 
 }

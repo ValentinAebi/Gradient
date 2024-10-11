@@ -1,7 +1,7 @@
 package commons
 
 
-sealed trait Phase[In, Out] {
+sealed trait Phase[-In, +Out] {
   topLevelPhase =>
 
   val phaseName: String
@@ -13,7 +13,7 @@ sealed trait Phase[In, Out] {
 
 }
 
-trait SimplePhase[In, Out](override val phaseName: String) extends Phase[In, Out] {
+trait SimplePhase[-In, +Out](override val phaseName: String) extends Phase[In, Out] {
 
   override final def run(in: In, reporter: Reporter): PhaseResult[Out] = {
     try {

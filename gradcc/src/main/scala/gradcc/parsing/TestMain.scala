@@ -1,14 +1,19 @@
 package gradcc.parsing
 
-import commons.{Fatal, NonFatal, Reporter, Success}
+import commons.{Fatal, NonFatal, Phase, Reporter, Success}
 import gradcc.asts.{AmbiguouslyNamedTerms, UniquelyNamedTerms}
-import gradcc.prettyprinting.Prettyprinter
+import gradcc.prettyprinting.PrettyprinterPhase
 import gradcc.renaming.RenamerPhase
+import gradcc.typechecking.TypeCheckerPhase
 
 @main def main(): Unit = {
 
+  enum Action {
+    case Prettyprint, Typecheck
+  }
+
   ///////////////////////////////////////////////////////////
-  val performRenaming = true
+  val action = Action.Typecheck
   val str =
     """
       |fn (x: Reg)
@@ -38,10 +43,14 @@ import gradcc.renaming.RenamerPhase
   //      |main.main()
   //      |""".stripMargin
   val reporter = new Reporter()
-  val end =
-    if performRenaming then RenamerPhase().andThen(Prettyprinter(UniquelyNamedTerms))
-    else Prettyprinter(AmbiguouslyNamedTerms)
-  val pipeline = ScannerPhase().andThen(ParserPhase()).andThen(end)
+  val pipeline: Phase[(Code, Filename), Any] =
+    ScannerPhase()
+      .andThen(ParserPhase())
+      .andThen(RenamerPhase())
+      .andThen(
+        if action == Action.Prettyprint then PrettyprinterPhase(UniquelyNamedTerms)
+        else TypeCheckerPhase()
+      )
   val res = pipeline.run((str, "Example.gradcc"), reporter)
   println(
     res match
