@@ -5,7 +5,7 @@ import scala.util.parsing.input
 import scala.util.parsing.input.Reader
 
 sealed trait ParsingReader extends Reader[CoreGradCCToken] {
-  override def pos: input.Position = mixinCombiPosition(first.pos)
+  override def pos: input.Position = first.pos
 }
 
 final case class NonTerminal(first: CoreGradCCToken, rest: Reader[CoreGradCCToken]) extends ParsingReader {
@@ -30,6 +30,3 @@ object ParsingReader {
   }
 
 }
-
-private def mixinCombiPosition(pos: commons.Position): commons.Position & input.Position =
-  new commons.Position(pos.file, pos.line, pos.column, pos.lineContents) with input.Position

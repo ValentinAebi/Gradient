@@ -1,7 +1,7 @@
-import commons.Reporter
+import gradcc.Reporter
 import gradcc.parsing.ScannerPhase
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
-import org.junit.jupiter.api.Test
+import org.junit.Assert.{assertEquals, assertFalse}
+import org.junit.Test
 
 class ScannerPhaseTests {
 

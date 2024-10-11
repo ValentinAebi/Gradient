@@ -1,8 +1,7 @@
 package gradcc.parsing
 
-import commons.*
 import gradcc.lang.{Conventions, Keyword, Operator}
-import gradcc.parsing
+import gradcc.{Position, Reporter, SimplePhase, parsing}
 
 import scala.util.matching.Regex
 

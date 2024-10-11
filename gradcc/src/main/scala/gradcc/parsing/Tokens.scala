@@ -1,6 +1,6 @@
 package gradcc.parsing
 
-import commons.Position
+import gradcc.Position
 import gradcc.lang.{Keyword, Operator}
 
 sealed trait GradCCToken {

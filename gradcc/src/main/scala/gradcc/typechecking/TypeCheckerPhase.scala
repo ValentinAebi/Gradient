@@ -1,6 +1,6 @@
 package gradcc.typechecking
 
-import commons.{Position, Reporter, SimplePhase}
+import gradcc.{Position, Reporter, SimplePhase}
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 import gradcc.typechecking.SubtypingRelation.subtypeOf

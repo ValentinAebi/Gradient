@@ -1,10 +1,10 @@
 package gradcc.parsing
 
-import commons.{Fatal, NonFatal, Phase, Reporter, Success}
-import gradcc.asts.{AmbiguouslyNamedTerms, UniquelyNamedTerms}
+import gradcc.asts.UniquelyNamedTerms
 import gradcc.prettyprinting.PrettyprinterPhase
 import gradcc.renaming.RenamerPhase
 import gradcc.typechecking.TypeCheckerPhase
+import gradcc.*
 
 @main def main(): Unit = {
 
@@ -13,7 +13,7 @@ import gradcc.typechecking.TypeCheckerPhase
   }
 
   ///////////////////////////////////////////////////////////
-  val action = Action.Typecheck
+  val action = Action.Prettyprint
   val str =
     """
       |fn (x: Reg)

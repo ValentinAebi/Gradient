@@ -1,6 +1,6 @@
 package gradcc.prettyprinting
 
-import commons.{Reporter, SimplePhase}
+import gradcc.{Reporter, SimplePhase}
 import gradcc.asts.TermsProvider
 import gradcc.lang.Keyword.*
 

@@ -1,6 +1,6 @@
 package gradcc.typechecking
 
-import commons.{Position, Reporter}
+import gradcc.{Position, Reporter}
 import gradcc.asts.UniqueVarId
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.Type

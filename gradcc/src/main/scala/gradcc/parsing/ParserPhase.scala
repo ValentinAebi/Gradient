@@ -1,6 +1,6 @@
 package gradcc.parsing
 
-import commons.{Reporter, SimplePhase}
+import gradcc.{Reporter, SimplePhase}
 import gradcc.*
 import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*

@@ -1,6 +1,6 @@
 package gradcc.asts
 
-import commons.Position
+import gradcc.Position
 
 trait TermsProvider {
 
