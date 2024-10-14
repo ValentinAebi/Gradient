@@ -1,10 +1,11 @@
 package gradcc.parsing
 
 import gradcc.asts.UniquelyNamedTerms
-import gradcc.prettyprinting.PrettyprinterPhase
+import gradcc.prettyprinting.{PrettyprinterPhase, TermsPrettyprinter, TypesPrettyprinter}
 import gradcc.renaming.RenamerPhase
 import gradcc.typechecking.TypeCheckerPhase
 import gradcc.*
+import gradcc.lang.Type
 
 @main def main(): Unit = {
 
@@ -13,7 +14,7 @@ import gradcc.*
   }
 
   ///////////////////////////////////////////////////////////
-  val action = Action.Prettyprint
+  val action = Action.Typecheck
   val str =
     """
       |fn (x: Reg)
@@ -43,7 +44,7 @@ import gradcc.*
   //      |main.main()
   //      |""".stripMargin
   val reporter = new Reporter()
-  val pipeline: Phase[(Code, Filename), Any] =
+  val pipeline: Phase[(Code, Filename), String | Map[UniquelyNamedTerms.Term, Type]] =
     ScannerPhase()
       .andThen(ParserPhase())
       .andThen(RenamerPhase())
@@ -54,6 +55,11 @@ import gradcc.*
   val res = pipeline.run((str, "Example.gradcc"), reporter)
   println(
     res match
+      case Success(typesAssignment: Map[UniquelyNamedTerms.Term, Type]) => {
+        val termsPp: UniquelyNamedTerms.Term => String = TermsPrettyprinter(UniquelyNamedTerms)
+        val typesPp = TypesPrettyprinter
+        typesAssignment.map((term, tpe) => s"${termsPp(term)} : ${typesPp(tpe)}").mkString("\n\n")
+      }
       case Success(value) =>
         s"\n$value"
       case Fatal(fatalErrorException) =>
@@ -61,8 +67,10 @@ import gradcc.*
       case NonFatal =>
         "Failure: non-fatal error(s) terminated the pipeline"
   )
+  println()
   if (reporter.somethingToReport) {
-    println()
     println(reporter.getStringReport)
+  } else {
+    println("No error found")
   }
 }

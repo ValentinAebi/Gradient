@@ -123,10 +123,10 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
     case bang ~ p => Deref(p, bang.pos)
   }
 
-  private lazy val modif: P[Modif] =
+  private lazy val module: P[Module] =
     (kw(ModKw) ~ openParenth ~ path ~ closeParenth ~ openBrace ~ rep1sep(field ~ equal ~ path, comma) ~ closeBrace).map {
       case mod ~ _ ~ capRegion ~ _ ~ _ ~ fields ~ _ =>
-        Modif(capRegion, fields.map {
+        Module(capRegion, fields.map {
           case id ~ _ ~ p => (id, p)
         }, mod.pos)
     }
@@ -144,7 +144,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
   }
 
   private lazy val term: P[Term] =
-    path OR value OR app OR unbox OR let OR region OR deref OR assignment OR ref OR modif OR parenthesizedTerm
+    path OR value OR app OR unbox OR let OR region OR deref OR assignment OR ref OR module OR parenthesizedTerm
 
   private lazy val parenthesizedTerm: P[Term] = (openParenth ~ term ~ closeParenth).map {
     case _ ~ t ~ _ => t

@@ -1,6 +1,5 @@
 package gradcc.typechecking
 
-import gradcc.asts.UniqueVarId
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 
@@ -33,15 +32,7 @@ def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTr
   case ImplicitCaptureSetTree(position) => Set(RootCapability)
 }
 
-def mkCapabilityPath(capPath: Path): CapabilityPath = {
-  val (root, selectsReversed) = flattenSelectsReversed(capPath)
-  CapabilityPath(root, selectsReversed.reverse)
-}
-
-private def flattenSelectsReversed(p: Path): (UniqueVarId, List[String]) = p match {
-  case Identifier(id, position) => (id, Nil)
-  case Select(root, select, position) => {
-    val (id, previousSelects) = flattenSelectsReversed(root)
-    (id, select :: previousSelects)
-  }
+def mkCapabilityPath(capPath: Path): CapabilityPath = capPath match {
+  case Identifier(id, position) => CapVar(id)
+  case Select(root, select, position) => CapPath(mkCapabilityPath(root), select)
 }

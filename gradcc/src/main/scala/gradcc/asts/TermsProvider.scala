@@ -20,7 +20,7 @@ trait TermsProvider {
   sealed trait Path extends Term
   case class Identifier(id: VarId, override val position: Position) extends Variable, Path
   case class Cap(override val position: Position) extends Variable
-  case class Select(root: Path, select: String, override val position: Position) extends Path
+  case class Select(lhs: Path, select: String, override val position: Position) extends Path
 
   sealed trait Field extends Ast
   case class NamedField(fieldName: String, override val position: Position) extends Field
@@ -39,7 +39,7 @@ trait TermsProvider {
   case class Deref(ref: Path, override val position: Position) extends Term
   case class Assign(ref: Path, newVal: Path, override val position: Position) extends Term
   case class Ref(regionCap: Path, initVal: Path, override val position: Position) extends Term
-  case class Modif(regionCap: Path, fields: Seq[(Field, Path)], override val position: Position) extends Term
+  case class Module(regionCap: Path, fields: Seq[(Field, Path)], override val position: Position) extends Term
 
   case class TypeTree(shape: TypeShapeTree, captureSet: Option[CaptureSetTree], override val position: Position) extends Ast
 

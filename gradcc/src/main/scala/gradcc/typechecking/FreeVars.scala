@@ -1,7 +1,7 @@
 package gradcc.typechecking
 
 import gradcc.asts.UniqueVarId
-import gradcc.lang.{AbsShape, BoxShape, CapabilityPath, Capturable, RecordShape, RefShape, RegionShape, RootCapability, ShapeType, TopShape, Type, UnitShape}
+import gradcc.lang.*
 
 extension (v: UniqueVarId) {
 
@@ -19,9 +19,11 @@ extension (v: UniqueVarId) {
     case RegionShape => false
     case RecordShape(selfRef, fields) => !selfRef.contains(v) && fields.exists((_, tpe) => isFreeIn(tpe))
   }
-  
+
   def isFreeIn(capturable: Capturable): Boolean = capturable match {
-    case CapabilityPath(root, selects) => root == v
+    case CapVar(variable) => this == variable
+    case CapPath(lhs, select) => isFreeIn(lhs)
+    case RegPath(lhs) => isFreeIn(lhs)
     case RootCapability => false
   }
 

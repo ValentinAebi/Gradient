@@ -8,16 +8,18 @@ sealed trait Capturable {
   def isRootedIn(varId: UniqueVarId): Boolean
 }
 
-case class CapabilityPath(root: UniqueVarId, selects: Seq[String]) extends Capturable {
+sealed trait CapabilityPath extends Capturable
+
+case class CapVar(root: UniqueVarId) extends CapabilityPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = (varId == root)
-  
-  def isPrefixOf(p: CapabilityPath): Boolean = {
-    val CapabilityPath(pRoot, pSelects) = p
-    root == pRoot && pSelects.startsWith(selects)
-  }
-  
-  def extendedWith(newSelects: Seq[String]): CapabilityPath = copy(selects = selects ++ newSelects)
-  
+}
+
+case class CapPath(lhs: CapabilityPath, select: String) extends CapabilityPath {
+  override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
+}
+
+case class RegPath(lhs: CapabilityPath) extends CapabilityPath {
+  override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
 }
 
 case object RootCapability extends Capturable {

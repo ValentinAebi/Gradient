@@ -1,15 +1,15 @@
 package gradcc.typechecking
 
-import gradcc.{Position, Reporter, SimplePhase}
+import gradcc.*
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 import gradcc.typechecking.SubtypingRelation.subtypeOf
-import gradcc.{asts, lang}
 
 import scala.collection.mutable
 
 
 final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typechecker") {
+  private val varCreator = SyntheticVarCreator()
 
   override protected def runImpl(in: Term, reporter: Reporter): Map[Term, Type] = {
     val types: TermsTypes = mutable.Map.empty
@@ -25,7 +25,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     t match {
       case Identifier(id, position) =>
         // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
-        store.apply(id)
+        ctx.varLookup(id)
       case Cap(position) => ???
       case Select(owner, fieldId, position) =>
         computeTypes(owner).flatMap {
@@ -54,9 +54,9 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           case (None, _) => None
           case (_, None) => None
           case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
-            mustBeAssignable(varType, argType, arg.position) {
-              Some(substitute(resType)(using Map(varId -> arg)))
-            }
+            mustBeAssignable(varType, argType, arg.position, {
+              Some(substitute(resType)(using Map(CapVar(varId) -> mkCapabilityPath(arg))))
+            })
           case (Some(callerType), _) =>
             reportError(s"$callerType is not callable", position)
         }
@@ -79,7 +79,25 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Deref(ref, position) => ???
       case Assign(ref, newVal, position) => ???
       case Ref(regionCap, initVal, position) => ???
-      case Modif(regionCap, fields, position) => ???
+      case Module(regionCap, fields, position) => {
+        val selfRefVar = varCreator.nextVar()
+        val regionCapType = computeTypes(regionCap)
+        regionCapType.foreach { regionCapType =>
+          mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
+        }
+        val substFieldsTypesOpt = fields.map((fld, t) =>
+          mkRecordField(fld) ->
+            computeTypes(t).map(substitute(_)(using Map(mkCapabilityPath(regionCap) -> RegPath(CapVar(selfRefVar)))))
+        )
+        val allTypesComputed = substFieldsTypesOpt.forall(_._2.isDefined)
+        if allTypesComputed then
+          Some(Type(
+            RecordShape(Some(selfRefVar),
+              substFieldsTypesOpt.map((fld, optT) => (fld, optT.get)).toMap + (RegionField -> Type(RegionShape, Set(RootCapability)))
+            ), Set(RootCapability)
+          ))
+        else None
+      }
     }
   })
 
@@ -104,11 +122,10 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case Deref(ref, position) => cv(ref)
     case Assign(ref, newVal, position) => cv(ref) ++ cv(newVal)
     case Ref(regionCap, initVal, position) => cv(regionCap) ++ cv(initVal)
-    case Modif(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
+    case Module(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
   }
 
-  private def mustBeAssignable(expectedType: Type, actualType: Type, pos: Position)
-                              (ifAssignable: => Option[Type])
+  private def mustBeAssignable(expectedType: Type, actualType: Type, pos: Position, ifAssignable: => Option[Type])
                               (using ctx: Ctx): Option[Type] = {
     val isSub = actualType.subtypeOf(expectedType)
     if (isSub) {

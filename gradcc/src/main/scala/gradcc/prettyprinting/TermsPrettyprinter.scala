@@ -1,19 +1,14 @@
 package gradcc.prettyprinting
 
-import gradcc.{Reporter, SimplePhase}
 import gradcc.asts.TermsProvider
 import gradcc.lang.Keyword.*
 
-def PrettyprinterPhase(p: TermsProvider): SimplePhase[p.Term, String] = new SimplePhase[p.Term, String]("Prettyprinter"){
 
-  override protected def runImpl(in: p.Term, reporter: Reporter): String = {
-    val isb = new IndentedStringBuilder()
-    pp(in)(using isb)
-    isb.toString
-  }
-
-  private def pp(term: p.Ast)(using isb: IndentedStringBuilder): Unit = {
-    import isb.*
+def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
+  val isb = IndentedStringBuilder()
+  import isb.*
+  
+  def pp(term: p.Ast): Unit = {
     term match {
       case p.Identifier(id, position) =>
         add(p.str(id))
@@ -77,7 +72,7 @@ def PrettyprinterPhase(p: TermsProvider): SimplePhase[p.Term, String] = new Simp
         pp(regionCap)
         add(".").add(RefLKw).add(" ")
         pp(initVal)
-      case p.Modif(regionCap, fields, position) =>
+      case p.Module(regionCap, fields, position) =>
         add(ModKw).add("(")
         pp(regionCap)
         add(") { ")
@@ -114,11 +109,16 @@ def PrettyprinterPhase(p: TermsProvider): SimplePhase[p.Term, String] = new Simp
       case p.RegTypeTree(position) =>
         add(RegUKw)
       case p.RecordTypeTree(selfRef, fieldsInOrder, position) =>
+        selfRef.foreach { selfRef =>
+          add(SelfKw).add(" ")
+          pp(selfRef)
+          add(" ").add(InKw).add(" ")
+        }
         add("{ ")
-        sepList(fieldsInOrder, ", ") { (fld, v) =>
+        sepList(fieldsInOrder, ", ") { (fld, tpe) =>
           pp(fld)
           add(": ")
-          pp(v)
+          pp(tpe)
         }
         add(" }")
       case p.ExplicitCaptureSetTree(capturedVarsInOrder, position) =>
@@ -130,15 +130,16 @@ def PrettyprinterPhase(p: TermsProvider): SimplePhase[p.Term, String] = new Simp
     }
   }
 
-  private def sepList[T](ls: Seq[T], sep: String)(f: IndentedStringBuilder ?=> T => Unit)(using isb: IndentedStringBuilder): Unit = {
+  def sepList[T](ls: Seq[T], sep: String)(f: T => Unit): Unit = {
     val iter = ls.iterator
     while (iter.hasNext) {
       f(iter.next())
       if (iter.hasNext) {
-        isb.add(", ")
+        add(", ")
       }
     }
   }
-
-
+  
+  pp(term)
+  isb.toString
 }

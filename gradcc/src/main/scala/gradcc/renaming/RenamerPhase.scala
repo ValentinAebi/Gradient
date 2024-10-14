@@ -55,8 +55,8 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
       U.Assign(convertPath(ref), convertPath(newVal), position)
     case A.Ref(regionCap, initVal, position) =>
       U.Ref(convertPath(regionCap), convertPath(initVal), position)
-    case A.Modif(regionCap, fields, position) =>
-      U.Modif(
+    case A.Module(regionCap, fields, position) =>
+      U.Module(
         convertPath(regionCap),
         fields.map((fld, p) => (convertField(fld), convertPath(p))),
         position

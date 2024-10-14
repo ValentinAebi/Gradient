@@ -10,19 +10,21 @@ object SubtypingRelation {
     lSh.subshapeOf(rSh) && lCap.subcaptureOf(rCap)
   }
 
-  extension (l: Set[Capturable]) def subcaptureOf(r: Set[Capturable])(using Ctx): Boolean = {
-    if r.contains(RootCapability) then true
-    else if l.contains(RootCapability) then false
-    else {
-      val lPaths = l.map(_.asInstanceOf[CapabilityPath]).groupBy(_.root)
-      val rPaths = r.map(_.asInstanceOf[CapabilityPath]).groupBy(_.root)
-      ???
+  extension (l: Set[Capturable]) def subcaptureOf(r: Set[Capturable])(using ctx: Ctx): Boolean = {
+    if (l.size == 1) {
+      l.head match {
+        // Sc-path
+        case p: CapabilityPath if ctx.pathLookup(p).exists(_.captureSet.subcaptureOf(r)) => true
+        // Sc-elem
+        case p if r.contains(p) => true
+        // Sc-mem
+        case CapPath(lhs, select) if Set(lhs).subcaptureOf(r) => true
+        case _ => false
+      }
+    } else {
+      // Sc-set
+      l.forall(c => Set(c).subcaptureOf(r))
     }
-  }
-
-  private def coveredBy(capt: CapabilityPath, captSet: Set[CapabilityPath], store: Store)(using Ctx): Boolean = {
-    val CapabilityPath(root, selects) = capt
-    ???
   }
 
   extension (l: ShapeType) def subshapeOf(r: ShapeType)(using Ctx): Boolean = (l, r) match {
