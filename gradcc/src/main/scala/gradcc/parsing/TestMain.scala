@@ -1,11 +1,12 @@
 package gradcc.parsing
 
+import gradcc.*
 import gradcc.asts.UniquelyNamedTerms
-import gradcc.prettyprinting.{PrettyprinterPhase, TermsPrettyprinter, TypesPrettyprinter}
+import gradcc.asts.UniquelyNamedTerms.Identifier
+import gradcc.lang.Type
+import gradcc.prettyprinting.{PrettyprinterPhase, TermsPrettyprinter}
 import gradcc.renaming.RenamerPhase
 import gradcc.typechecking.TypeCheckerPhase
-import gradcc.*
-import gradcc.lang.Type
 
 @main def main(): Unit = {
 
@@ -20,7 +21,7 @@ import gradcc.lang.Type
       |fn (x: Reg)
       |  let r = x in
       |     let x = fn (x: Unit, y: Reg^{x}, r: Reg^, g: fn (x: Unit) Reg) g x
-      |     in mod (x) { a = x, b = r }
+      |     in mod (r) { a = x, b = r }
       |""".stripMargin
   ///////////////////////////////////////////////////////////
 
@@ -57,8 +58,15 @@ import gradcc.lang.Type
     res match
       case Success(typesAssignment: Map[UniquelyNamedTerms.Term, Type]) => {
         val termsPp: UniquelyNamedTerms.Term => String = TermsPrettyprinter(UniquelyNamedTerms)
-        val typesPp = TypesPrettyprinter
-        typesAssignment.map((term, tpe) => s"${termsPp(term)} : ${typesPp(tpe)}").mkString("\n\n")
+        val (_, resType) = typesAssignment.maxBy(_._1.toString.length)
+        typesAssignment.filter(_._1.isInstanceOf[Identifier])
+          .map((term, tpe) => s"${termsPp(term)} : ${colorParentheses(tpe.toString)}")
+          .toSet
+          .toSeq
+          .sorted
+          .mkString("\n")
+        ++
+        s"\n\nResult: ${colorParentheses(resType.toString)}"
       }
       case Success(value) =>
         s"\n$value"
@@ -73,4 +81,26 @@ import gradcc.lang.Type
   } else {
     println("No error found")
   }
+}
+
+private val resetColorCode: String = "\u001B[0m"
+private def mkColor(depth: Int): String = s"\u001B[3${depth % 6 + 1}m"
+
+private def colorParentheses(str: String): String = {
+  var depth = 0
+  val sb = new StringBuilder()
+  for (c <- str) {
+    if (c == '(' || c == '{') {
+      depth += 1
+    }
+    if (c == '(' || c == ')' || c == '{' || c == '}') {
+      sb.append(mkColor(depth)).append(c).append(resetColorCode)
+    } else {
+      sb.append(c)
+    }
+    if (c == ')' || c == '}') {
+      depth -= 1
+    }
+  }
+  sb.toString()
 }

@@ -80,7 +80,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Assign(ref, newVal, position) => ???
       case Ref(regionCap, initVal, position) => ???
       case Module(regionCap, fields, position) => {
-        val selfRefVar = varCreator.nextVar()
+        val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
         val regionCapType = computeTypes(regionCap)
         regionCapType.foreach { regionCapType =>
           mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)

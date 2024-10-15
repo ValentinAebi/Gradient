@@ -5,8 +5,8 @@ import gradcc.asts.UniqueVarId
 final class SyntheticVarCreator {
   private var nextIdx = 0
   
-  def nextVar(): UniqueVarId = {
-    val v = UniqueVarId("<auto>", nextIdx)
+  def nextVar(name: String): UniqueVarId = {
+    val v = UniqueVarId(name, nextIdx)
     nextIdx += 1
     v
   }
