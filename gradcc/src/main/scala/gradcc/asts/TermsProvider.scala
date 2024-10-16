@@ -34,7 +34,7 @@ trait TermsProvider {
   sealed trait Value extends Term
   case class Box(boxed: Path, override val position: Position) extends Value
   case class Abs(varId: Identifier, tpe: TypeTree, body: Term, override val position: Position) extends Value
-  case class RecordLiteral(selfRef: Option[Identifier], fields: Seq[(Field, Path)], override val position: Position) extends Value
+  case class RecordLiteral(fields: Seq[(Field, Path)], override val position: Position) extends Value
   case class UnitLiteral(override val position: Position) extends Value
   
   case class App(callee: Path, arg: Path, override val position: Position) extends Term

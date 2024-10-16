@@ -3,6 +3,7 @@ package gradcc.typechecking
 import gradcc.*
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
+import gradcc.lang.Keyword.SelfKw
 import gradcc.typechecking.SubtypingRelation.*
 
 import scala.collection.mutable
@@ -45,9 +46,9 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           AbsShape(varId, varType, bodyType) ^ cv(abs)
         }
       }
-      case recordLit@RecordLiteral(selfRef, fields, position) => Some(
+      case recordLit@RecordLiteral(fields, position) => Some(
         RecordShape(
-          selfRef.map(_.id),
+          None,
           fields.flatMap((fld, p) => computeTypes(p).map((mkRecordField(fld), _))).toMap,
         ) ^ cv(recordLit)
       )
@@ -118,7 +119,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           case _ => None
         }
       case Module(regionCap, fields, position) => {
-        val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
+        val selfRefVar = varCreator.nextVar(SelfKw.str)
         val regionCapType = computeTypes(regionCap)
         regionCapType.foreach { regionCapType =>
           mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
@@ -146,9 +147,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     case Cap(position) => Set(RootCapability)
     case Box(boxed, position) => Set.empty
     case Abs(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
-    case RecordLiteral(selfRef, fields, position) =>
-      fields.flatMap((_, p) => cv(p)).toSet
-        .filterNot(capturable => selfRef.exists(sr => capturable.isRootedIn(sr.id)))
+    case RecordLiteral(fields, position) => fields.flatMap((_, p) => cv(p)).toSet
     case UnitLiteral(position) => Set.empty
     case App(callee, arg, position) => cv(callee) ++ cv(arg)
     case Unbox(captureSet, boxed, position) => mkCaptureSet(captureSet) ++ cv(boxed)

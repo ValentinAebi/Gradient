@@ -28,12 +28,7 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         add(")").incIndent().newLine()
         pp(body)
         decIndent()
-      case p.RecordLiteral(selfRef, fields, position) =>
-        selfRef.foreach { selfRef =>
-          add(SelfKw).add(" ")
-          pp(selfRef)
-          add(" ").add(InKw).add(" ")
-        }
+      case p.RecordLiteral(fields, position) =>
         add("{ ")
         sepList(fields, ", ") { (fld, v) =>
           pp(fld)

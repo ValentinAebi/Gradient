@@ -26,11 +26,9 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
         convertTerm(body)(using newCtx),
         position
       )
-    case A.RecordLiteral(selfRef, fields, position) =>
-      val updatedCtx = selfRef.map(selfRef => ctx.withNewId(selfRef.id)).getOrElse(ctx)
+    case A.RecordLiteral(fields, position) =>
       U.RecordLiteral(
-        selfRef.map(convertIdentifier(_)(using updatedCtx)),
-        fields.map((fld, p) => (convertField(fld), convertPath(p)(using updatedCtx))),
+        fields.map((fld, p) => (convertField(fld), convertPath(p))),
         position
       )
     case A.UnitLiteral(position) =>

@@ -1,8 +1,7 @@
 package gradcc
 
-import scala.util.parsing.input
 
-case class Position(file: String, line: Int, column: Int, lineContents: String) extends input.Position {
+case class Position(file: String, line: Int, column: Int, lineContents: String) {
 
   override def toString: String = s"$file:$line:$column"
   

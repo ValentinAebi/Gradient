@@ -1,257 +1,225 @@
 package gradcc.parsing
 
+import gradcc.*
+import gradcc.asts.AmbiguouslyNamedTerms
 import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, Operator}
-import gradcc.*
 
-import scala.collection.immutable.ArraySeq
-import scala.util.parsing.combinator.Parsers
+import scala.annotation.tailrec
 
-final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), Parsers {
+final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
 
-  override type Elem = GradCCToken
-
-  // ----- Syntax primitives --------------------------
-
-  private val lower = acceptMatch("[identifier]", {
-    case tok: LowerWordToken => tok
-  })
-
-  private val upper = acceptMatch("[type identifier]", {
-    case tok: UpperWordToken => tok
-  })
-
-  private def kw(kw: Keyword) = acceptMatch(s"[${kw.str}]", {
-    case tok: KeywordToken if tok.keyword == kw => tok
-  })
-
-  private def op(op: Operator) = acceptMatch(s"[${op.str}]", {
-    case tok: OperatorToken if tok.operator == op => tok
-  })
-
-  private lazy val eof = acceptMatch("[eof]", {
-    case _: EndOfFileToken => ()
-  })
-
-  private val dot = op(Dot)
-  private val comma = op(Comma)
-  private val colon = op(Colon)
-  private val equal = op(Equal)
-  private val openParenth = op(OpenParenth)
-  private val closeParenth = op(CloseParenth)
-  private val openBrace = op(OpenBrace)
-  private val closeBrace = op(CloseBrace)
-
-  private type P[T] = Parser[T]
-
-  // ----- Syntax -------------------------------------
-
-  private lazy val identifier = lower.map {
-    case LowerWordToken(str, pos) => Identifier(str, pos)
-  }
-
-  private lazy val cap: P[Cap] = kw(CapKw).map {
-    case KeywordToken(kw, pos) => Cap(pos)
-  }
-
-  private lazy val namedField: P[NamedField] = lower.map {
-    case LowerWordToken(str, pos) => NamedField(str, pos)
-  }
-
-  private lazy val reg: P[Reg] = kw(RegLKw).map(tok => Reg(tok.pos))
-
-  private lazy val field: P[Field] = namedField OR reg
-
-  private lazy val path: P[Path] = (identifier ~ rep(dot ~ lower)).map {
-    case root ~ selects => {
-      selects.foldLeft[Path](root) {
-        case (r, dotTok ~ fldTok) => Select(r, fldTok.str, dotTok.pos)
-      }
-    }
-  }
-
-  private lazy val box: P[Box] = (kw(BoxKw) ~ path).map {
-    case box ~ p => Box(p, box.pos)
-  }
-
-  private lazy val abs: P[Abs] = (kw(FnKw) ~ openParenth ~ rep1sep(identifier ~ colon ~ tpe, comma) ~ closeParenth ~ term).map {
-    case fn ~ _ ~ ((param1Id ~ _ ~ param1Type) :: subsequentParams) ~ _ ~ body => {
-      val abs1Body = subsequentParams.foldRight(body) {
-        (param, accBody) => {
-          val id ~ _ ~ tpe = param
-          Abs(id, tpe, accBody, id.position)
-        }
-      }
-      Abs(param1Id, param1Type, abs1Body, fn.pos)
-    }
-  }
-
-  private lazy val recordLit: P[RecordLiteral] = (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ (openBrace ~ rep(field ~ equal ~ path) ~ closeBrace)).map {
-    case optSelfRef ~ (openBr ~ fields ~ _) => RecordLiteral(
-      optSelfRef.map {
-        case _ ~ id ~ _ => id
-      },
-      fields.map {
-        case fld ~ _ ~ p => (fld, p)
-      },
-      openBr.pos
-    )
-  }
-
-  private lazy val unitLit: P[UnitLiteral] = (openParenth ~ closeParenth).map {
-    case openB ~ _ => UnitLiteral(openB.pos)
-  }
-
-  private lazy val value: P[Value] = box OR abs OR recordLit OR unitLit
-
-  private lazy val unbox: P[Unbox] = (kw(UnboxKw) ~ path ~ kw(Using) ~ explicitCaptureSet).map {
-    case unbox ~ p ~ _ ~ capSet => Unbox(capSet, p, unbox.pos)
-  }
-
-  private lazy val let: P[Let] = (kw(LetKw) ~ identifier ~ equal ~ term ~ kw(InKw) ~ term).map {
-    case let ~ id ~ _ ~ value ~ _ ~ body => Let(id, value, body, let.pos)
-  }
-
-  private lazy val region: P[Region] = kw(RegionKw).map(reg => Region(reg.pos))
-
-  private lazy val deref: P[Deref] = (op(Bang) ~ path).map {
-    case bang ~ p => Deref(p, bang.pos)
-  }
-
-  private lazy val module: P[Module] =
-    (kw(ModKw) ~ openParenth ~ path ~ closeParenth ~ openBrace ~ rep1sep(field ~ equal ~ path, comma) ~ closeBrace).map {
-      case mod ~ _ ~ capRegion ~ _ ~ _ ~ fields ~ _ =>
-        Module(capRegion, fields.map {
-          case id ~ _ ~ p => (id, p)
-        }, mod.pos)
-    }
-
-  private lazy val app: P[App] = (path ~ path).map {
-    case callee ~ arg => App(callee, arg, callee.position)
-  }
-
-  private lazy val assignment: P[Assign] = (path ~ op(ColumnEqual) ~ path).map {
-    case lhs ~ _ ~ rhs => Assign(lhs, rhs, lhs.position)
-  }
-
-  private lazy val ref: P[Ref] = (path ~ dot ~ ref ~ path).map {
-    case lhs ~ _ ~ _ ~ rhs => Ref(lhs, rhs, lhs.position)
-  }
-
-  private lazy val term: P[Term] =
-    path OR value OR app OR unbox OR let OR region OR deref OR assignment OR ref OR module OR parenthesizedTerm
-
-  private lazy val parenthesizedTerm: P[Term] = (openParenth ~ term ~ closeParenth).map {
-    case _ ~ t ~ _ => t
-  }
-
-  private lazy val topType: P[TopTypeTree] = kw(TopKw).map(top => TopTypeTree(top.pos))
-
-  private lazy val depType: P[AbsTypeTree] = (openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ op(Arrow) ~ tpe).map {
-    case opp ~ param ~ _ ~ paramType ~ _ ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, opp.pos)
-  }
-
-  private lazy val boxType: P[BoxTypeTree] = (kw(BoxKw) ~ tpe).map {
-    case box ~ boxed => BoxTypeTree(boxed, box.pos)
-  }
-
-  private lazy val unitType: P[UnitTypeTree] = kw(UnitKw).map(unit => UnitTypeTree(unit.pos))
-
-  private lazy val refType: P[RefTypeTree] = (kw(RefUKw) ~ typeShape).map {
-    case ref ~ referenced => RefTypeTree(referenced, ref.pos)
-  }
-
-  private lazy val regType: P[RegTypeTree] = kw(RegUKw).map(reg => RegTypeTree(reg.pos))
-
-  private lazy val recordType: P[RecordTypeTree] =
-    (opt(kw(SelfKw) ~ identifier ~ kw(InKw)) ~ openBrace ~ rep(namedField ~ colon ~ tpe) ~ closeBrace).map {
-      case idToksOpt ~ openB ~ fieldsToks ~ _ => {
-        val idOpt = idToksOpt.map {
-          case _ ~ id ~ _ => id
-        }
-        val fields = fieldsToks.map {
-          case fldName ~ _ ~ fldType => (fldName, fldType)
-        }
-        val pos = idOpt.map(_.position).getOrElse(openB.pos)
-        RecordTypeTree(idOpt, fields, pos)
-      }
-    }
-
-  private lazy val typeShape: P[TypeShapeTree] = topType OR depType OR boxType OR unitType OR refType OR regType OR recordType
-
-  private lazy val tpe: P[TypeTree] = (typeShape ~ opt(op(Hat) ~ opt(explicitCaptureSet))).map {
-    case shape ~ Some(_ ~ Some(explicitCapSet)) =>
-      TypeTree(shape, Some(explicitCapSet), shape.position)
-    case shape ~ Some(hat ~ None) =>
-      TypeTree(shape, Some(RootCaptureSet(hat.pos)), shape.position)
-    case shape ~ None =>
-      TypeTree(shape, None, shape.position)
-  }
-
-  private lazy val explicitCaptureSet: P[CaptureSetTree] = (openBrace ~ (repsep(path, comma) | cap) ~ closeBrace).map {
-    case openB ~ Cap(capPos) ~ closeB => RootCaptureSet(capPos)
-    case openB ~ (capPaths: Seq[Path]) ~ _ => NonRootCaptureSet(capPaths, openB.pos)
-  }
-
+  private type Tokens = List[GradCCToken]
 
   override protected def runImpl(in: Seq[GradCCToken], reporter: Reporter): Term = {
-    val interestingTokens = filterIsKindedToken(in)
-    val reader = ParsingReader.from(interestingTokens)
-    (term ~ eof).apply(reader) match {
-      case Success(result ~ (), remaining) => result
-      case Failure(rawMsg, remaining) =>
-        val expectedTokens = extractExpectedTokensList(rawMsg)
-        val msg = s"unexpected token: '${remaining.first.str}', expected one of: " + expectedTokens.mkString("'", "', '", "'")
-        reporter.fatal(msg, remaining.first.pos)
-      case Error(msg, _) => throw RuntimeException(msg)
+
+    def startsWithLowerWord(tokens: Tokens): Boolean = tokens match {
+      case LowerWordToken(_, _) :: _ => true
+      case _ => false
     }
-  }
 
-  private def filterIsKindedToken(tokens: Seq[GradCCToken]): ArraySeq[CoreGradCCToken] = {
-    val b = ArraySeq.newBuilder[CoreGradCCToken]
-    tokens foreach {
-      case kindedGradCCToken: CoreGradCCToken =>
-        b.addOne(kindedGradCCToken)
-      case _ => ()
+    def startsWithKeyword(kw: Keyword, tokens: Tokens): Boolean = tokens match {
+      case KeywordToken(`kw`, _) :: _ => true
+      case _ => false
     }
-    b.result()
-  }
 
-  // HACK (for better error messages)
-  // This method is mostly copied from the `|||` combinator in Scala parser combinators library
-  extension [T](p: Parser[T]) private infix def OR[U >: T](q0: => Parser[U]): Parser[U] = new Parser[U] {
-    lazy val q: Parser[U] = q0 // lazy argument
+    def startsWithOperator(op: Operator, tokens: Tokens): Boolean = tokens match {
+      case OperatorToken(`op`, _) :: _ => true
+      case _ => false
+    }
 
-    def apply(in: Input): ParseResult[U] = {
-      val res1 = p(in)
-      val res2 = q(in)
+    def parsePath(tokens: Tokens): (Path, Tokens) = tokens match {
+      case LowerWordToken(rootId, pos) :: rem => parsePathFollow(rem, Identifier(rootId, pos))
+      case _ => reporter.fatal("expected a path", tokens.headPos)
+    }
 
-      ((res1, res2): @unchecked) match {
-        case (s1@Success(_, next1), s2@Success(_, next2)) =>
-          if (next2.pos < next1.pos || next2.pos == next1.pos) s1 else s2
-        case (s1@Success(_, _), _) => s1
-        case (_, s2@Success(_, _)) => s2
-        case (e1@Error(_, _), _) => e1
-        case (f1@Failure(msg1, next1), f2@Failure(msg2, next2)) if next1 == next2 =>
-          Failure(combineExpectedTokens(msg1, msg2), next1)
-        case (f1@Failure(_, next1), ns2@NoSuccess(_, next2)) =>
-          if (next2.pos < next1.pos || next2.pos == next1.pos) f1 else ns2
+    @tailrec
+    def parsePathFollow(tokens: Tokens, acc: Path): (Path, Tokens) = tokens match {
+      case OperatorToken(Dot, pos) :: LowerWordToken(fld, _) :: rem =>
+        parsePathFollow(rem, Select(acc, fld, pos))
+      case _ => (acc, tokens)
+    }
+
+    def parseAssignFollow(tokens: Tokens, lhs: Path): (Assign, Tokens) = tokens match {
+      case OperatorToken(ColumnEqual, pos) :: rem1 =>
+        val (rhs, rem2) = parsePath(rem1)
+        (Assign(lhs, rhs, pos), rem2)
+      case _ => reporter.fatal("expected ':='", tokens.headPos)
+    }
+
+    def parseDotRefFollow(tokens: Tokens, lhs: Path): (Ref, Tokens) = tokens match {
+      case OperatorToken(Dot, dotPos) :: KeywordToken(RefLKw, _) :: rem1 =>
+        val (rhs, rem2) = parsePath(rem1)
+        (Ref(lhs, rhs, dotPos), rem2)
+      case _ => reporter.fatal(s"expected '.$RefLKw'", tokens.headPos)
+    }
+
+    def parseValueOpt(tokens: Tokens): Option[(Value, Tokens)] = tokens match {
+      case OperatorToken(BoxKw, pos) :: rem1 => Some {
+        val (p, rem2) = parsePath(rem1)
+        (Box(p, pos), rem2)
+      }
+      case OperatorToken(FnKw, fnPos) :: rem1 => Some {
+
+        def reportMalformedFunction(nextTokens: Tokens) =
+          reporter.fatal("malformed function", nextTokens.headPos)
+
+        rem1 match {
+          case OperatorToken(OpenParenth, _) :: LowerWordToken(varId, varPos) :: OperatorToken(Colon, _) :: rem2 =>
+            val (tpe, rem3) = parseType(rem2)
+            rem3 match {
+              case OperatorToken(CloseParenth, _) :: rem4 =>
+                val (body, rem5) = parseTerm(rem4)
+                (Abs(Identifier(varId, varPos), tpe, body, fnPos), rem5)
+              case _ => reportMalformedFunction(rem3)
+            }
+          case _ => reportMalformedFunction(rem1)
+        }
+      }
+      case OperatorToken(OpenBrace, openBracePos) :: rem1 => Some {
+        val (fields, rem2) = parseCommaSeparatedFieldValuePairs(rem1)
+        rem2 match {
+          case OperatorToken(CloseBrace, _) :: rem3 =>
+            (RecordLiteral(fields, openBracePos), rem3)
+          case _ => reporter.fatal("expected '}'", rem2.headPos)
+        }
+      }
+      case OperatorToken(OpenParenth, pos) :: OperatorToken(CloseParenth, _) :: rem =>
+        Some((UnitLiteral(pos), rem))
+      case _ => None
+    }
+
+    def parseCommaSeparatedFieldValuePairs(tokens: Tokens): (List[(Field, Path)], Tokens) = {
+      tokens match {
+        case LowerWordToken(fld, fldPos) :: OperatorToken(Equal, _) :: rem1 =>
+          val r2@(p, rem2) = parsePath(rem1)
+          val head = (NamedField(fld, fldPos), p)
+          rem2 match {
+            case OperatorToken(Comma, _) :: rem3 =>
+              val (tail, rem4) = parseCommaSeparatedFieldValuePairs(rem3)
+              (head :: tail, rem4)
+            case _ => (List(head), rem2)
+          }
+        case _ => (Nil, tokens)
       }
     }
 
-    override def toString = "|||"
+    def parseCommaSeparatedPaths(tokens: Tokens): (List[Path], Tokens) = tokens match {
+      case LowerWordToken(_, _) :: _ =>
+        val (head, rem1) = parsePath(tokens)
+        rem1 match {
+          case OperatorToken(Comma, _) :: rem2 =>
+            val (tail, rem3) = parseCommaSeparatedPaths(rem2)
+            (head :: tail, rem3)
+          case _ => (List(head), rem1)
+        }
+      case _ => (Nil, tokens)
+    }
+
+    def parseTerm(tokens: Tokens): (Term, Tokens) = tokens match {
+
+      // cases starting with a path
+      case _ if startsWithLowerWord(tokens) =>
+        val res1@(p1, rem1) = parsePath(tokens)
+        if (startsWithLowerWord(rem1)) {
+          val (p2, rem2) = parsePath(rem1)
+          (App(p1, p2, p1.position), rem2)
+        } else if (startsWithOperator(ColumnEqual, rem1)) {
+          parseAssignFollow(rem1, p1)
+        } else if (startsWithOperator(Dot, rem1)) {
+          parseDotRefFollow(rem1, p1)
+        } else res1
+
+      // let-binding
+      case KeywordToken(LetKw, letPos) :: rem1 =>
+        def reportMalformedLet(remTokens: Tokens) =
+          reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", remTokens.headPos)
+
+        rem1 match {
+          case LowerWordToken(id, idPos) :: OperatorToken(Equal, _) :: rem2 =>
+            val (value, rem3) = parseTerm(rem2)
+            rem3 match {
+              case KeywordToken(InKw, _) :: rem4 =>
+                val (body, rem5) = parseTerm(rem4)
+                (Let(Identifier(id, idPos), value, body, letPos), rem5)
+              case _ => reportMalformedLet(rem3)
+            }
+          case _ => reportMalformedLet(rem1)
+        }
+
+      // region
+      case KeywordToken(RegionKw, pos) :: rem => (Region(pos), rem)
+
+      // dereference
+      case OperatorToken(Bang, pos) :: rem1 =>
+        val (p, rem2) = parsePath(rem1)
+        (Deref(p, pos), rem2)
+
+      // module
+      case KeywordToken(ModKw, modPos) :: rem1 =>
+        def reportMalformedModule(remTokens: Tokens) = reporter.fatal("malformed module", remTokens.headPos)
+
+        rem1 match {
+          case OperatorToken(OpenParenth, _) :: rem2 =>
+            val (region, rem3) = parsePath(rem2)
+            rem3 match {
+              case OperatorToken(CloseParenth, _) :: OperatorToken(OpenBrace, _) :: rem4 =>
+                val (fields, rem5) = parseCommaSeparatedFieldValuePairs(rem4)
+                rem5 match {
+                  case OperatorToken(CloseBrace, _) :: rem6 =>
+                    (Module(region, fields, modPos), rem6)
+                  case _ =>
+                    reportMalformedModule(rem5)
+                }
+              case _ => reportMalformedModule(rem3)
+            }
+          case _ => reportMalformedModule(rem1)
+        }
+
+      // special case, ambiguous between record literal and empty capture set for unboxing
+      case OperatorToken(OpenBrace, pos) :: OperatorToken(CloseBrace, _) :: rem =>
+        if (startsWithKeyword(UnboxKw, rem)) {
+          reporter.fatal("capture set cannot be empty for unbox form", pos)
+        }
+        (RecordLiteral(Seq.empty, pos), rem)
+
+      // remaining cases: value or unboxing
+      case tokens =>
+        parseValueOpt(tokens).getOrElse {
+          tokens match
+            case OperatorToken(OpenBrace, openBracePos) :: rem1 =>
+              val (capturedPaths, rem2) = parseCommaSeparatedPaths(rem1)
+              val captureSetTree = NonRootCaptureSet(capturedPaths, openBracePos)
+              rem2 match {
+                case OperatorToken(CloseBrace, _) :: KeywordToken(UnboxKw, unboxPos) :: rem3 =>
+                  val (p, rem4) = parsePath(rem3)
+                  (Unbox(captureSetTree, p, unboxPos), rem4)
+                case _ => reporter.fatal("malformed unbox term", rem2.headPos)
+              }
+            case _ => reporter.fatal("expected a term", tokens.headPos)
+        }
+
+    }
+
+    def parseType(tokens: Tokens): (TypeTree, Tokens) = ???
+    
+    def parseShape(tokens: Tokens): (TypeShapeTree, Tokens) = tokens match {
+      case KeywordToken(TopKw, pos) :: rem =>
+        (TopTypeTree(pos), rem)
+      // TODO
+    }
+
+    val (term, remTokens) = parseTerm(in.toList)
+    if (remTokens.nonEmpty) {
+      reporter.fatal("unexpected tokens at the end of the input", remTokens.head.pos)
+    }
+    term
   }
 
-  private def combineExpectedTokens(l: String, r: String): String = {
-    val lTokens = extractExpectedTokensList(l)
-    val rTokens = extractExpectedTokensList(r)
-    (lTokens ++ rTokens).mkString("[", ",", "]")
-  }
-
-  private def extractExpectedTokensList(str: String): Array[String] =
-    str.dropWhile(_ != '[').tail.takeWhile(_ != ']').split(',')
+  extension (tokens: Tokens) private def headPos: Option[Position] =
+    tokens.headOption.map(_.pos)
 
   case class ParsingException(msg: String) extends RuntimeException(msg)
 
