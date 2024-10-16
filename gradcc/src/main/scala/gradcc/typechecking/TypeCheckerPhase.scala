@@ -22,7 +22,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
 
   private def computeTypes(t: Term)(using ctx: Ctx): Option[Type] = ctx.types.getOrElseUpdate(t, {
     import ctx.*
-    t match {
+    val tpe = t match {
       case Identifier(id, position) =>
         // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
         ctx.varLookup(id)
@@ -64,6 +64,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Unbox(captureSet, boxed, position) => ???
       case Let(varId, value, body, position) => {
         val valueType = computeTypes(value)
+        reporter.info(s"assign ${varId.id} : ${typeDescr(valueType)}", varId.position)
         val bodyType = computeTypes(body)(using ctx.withNewBinding(varId.id, valueType))
         bodyType.foreach { bodyType =>
           if (varId.id.isFreeIn(bodyType)) {
@@ -99,6 +100,8 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         else None
       }
     }
+    reporter.info(s"found ${t.description} : ${typeDescr(tpe)}", t.position)
+    tpe
   })
 
   private def cv(term: Term): Set[Capturable] = term match {
@@ -134,5 +137,8 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       ctx.reportError(s"type mismatch: expected $expectedType, but was $actualType", pos)
     }
   }
+
+  private def typeDescr(optType: Option[Type]): String =
+    optType.map(_.toString).getOrElse("??")
 
 }

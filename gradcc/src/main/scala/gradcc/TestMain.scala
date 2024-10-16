@@ -2,12 +2,14 @@ package gradcc
 
 import gradcc.*
 import gradcc.asts.UniquelyNamedTerms
-import gradcc.asts.UniquelyNamedTerms.Identifier
 import gradcc.lang.Type
 import gradcc.parsing.{Code, Filename, ParserPhase, ScannerPhase}
-import gradcc.prettyprinting.{PrettyprinterPhase, TermsPrettyprinter}
+import gradcc.prettyprinting.PrettyprinterPhase
 import gradcc.renaming.RenamerPhase
 import gradcc.typechecking.TypeCheckerPhase
+
+import scala.io.Source
+import scala.util.Using
 
 @main def main(): Unit = {
 
@@ -17,34 +19,10 @@ import gradcc.typechecking.TypeCheckerPhase
 
   ///////////////////////////////////////////////////////////
   val action = Action.Typecheck
-  val str =
-    """
-      |fn (x: Reg)
-      |  let r = x in
-      |     let x = fn (x: Unit, y: Reg^{x}, r: Reg^, g: fn (x: Unit) Reg) g x
-      |     in mod (r) { a = x, b = r }
-      |""".stripMargin
+  val path = "examples/ex1.gradcc"
   ///////////////////////////////////////////////////////////
 
-  //  val str =
-  //    """
-  //      |let newLogger = fn (fs: Fs^)
-  //      |  let r = region in
-  //      |  let _log = fn (msg : String ) = ... in
-  //      |  mod (r) { log = _log }
-  //      |in
-  //      |
-  //      |let newMain = fn (fs: Fs^)(net: Net^)
-  //      |  let r = region in
-  //      |  let _main = fn (u: Unit)
-  //      |    let logger = newLogger fs in ...
-  //      |  in mod (r) { main = _main }
-  //      |in
-  //      |
-  //      |// initialize Main & run the program
-  //      |let main = newMain fs net in
-  //      |main.main()
-  //      |""".stripMargin
+  val str = Using(Source.fromFile(path))(_.getLines().mkString("\n")).get
   val reporter = new Reporter()
   val pipeline: Phase[(Code, Filename), String | Map[UniquelyNamedTerms.Term, Type]] =
     ScannerPhase()
@@ -54,20 +32,12 @@ import gradcc.typechecking.TypeCheckerPhase
         if action == Action.Prettyprint then PrettyprinterPhase(UniquelyNamedTerms)
         else TypeCheckerPhase()
       )
-  val res = pipeline.run((str, "Example.gradcc"), reporter)
+  val res = pipeline.run((str, path), reporter)
   println(
     res match
       case Success(typesAssignment: Map[UniquelyNamedTerms.Term, Type]) => {
-        val termsPp: UniquelyNamedTerms.Term => String = TermsPrettyprinter(UniquelyNamedTerms)
         val (_, resType) = typesAssignment.maxBy(_._1.toString.length)
-        typesAssignment.filter(_._1.isInstanceOf[Identifier])
-          .map((term, tpe) => s"${termsPp(term)} : ${colorParentheses(tpe.toString)}")
-          .toSet
-          .toSeq
-          .sorted
-          .mkString("\n")
-        ++
-        s"\n\nResult: ${colorParentheses(resType.toString)}"
+        "\n" + colorParentheses(resType.toString)
       }
       case Success(value) =>
         s"\n$value"

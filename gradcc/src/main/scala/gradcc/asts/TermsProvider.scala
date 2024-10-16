@@ -12,15 +12,20 @@ trait TermsProvider {
 
   sealed trait Ast {
     val position: Position
+    def description: String = getClass.getSimpleName.toLowerCase()
   }
 
   sealed trait Term extends Ast
 
   sealed trait Variable extends Term
   sealed trait Path extends Term
-  case class Identifier(id: VarId, override val position: Position) extends Variable, Path
+  case class Identifier(id: VarId, override val position: Position) extends Variable, Path {
+    override def description: String = str(id)
+  }
   case class Cap(override val position: Position) extends Variable
-  case class Select(lhs: Path, select: String, override val position: Position) extends Path
+  case class Select(lhs: Path, select: String, override val position: Position) extends Path {
+    override def description: String = s".$select"
+  }
 
   sealed trait Field extends Ast
   case class NamedField(fieldName: String, override val position: Position) extends Field

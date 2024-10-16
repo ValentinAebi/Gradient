@@ -64,9 +64,9 @@ final class Reporter {
   }
 
   private def dumpList(ps: PrintStream, ls: ListBuffer[Entry], reportType: String): Unit = {
-    ps.println(s"${ls.size} $reportType:")
+    ps.println(s"----------------- ${ls.size} $reportType ".padTo(60, '-'))
     for (entry <- ls) {
-      ps.println(" " + entry)
+      ps.println(entry)
     }
   }
 
