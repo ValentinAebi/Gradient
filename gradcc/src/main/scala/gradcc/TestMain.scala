@@ -1,9 +1,10 @@
-package gradcc.parsing
+package gradcc
 
 import gradcc.*
 import gradcc.asts.UniquelyNamedTerms
 import gradcc.asts.UniquelyNamedTerms.Identifier
 import gradcc.lang.Type
+import gradcc.parsing.{Code, Filename, ParserPhase, ScannerPhase}
 import gradcc.prettyprinting.{PrettyprinterPhase, TermsPrettyprinter}
 import gradcc.renaming.RenamerPhase
 import gradcc.typechecking.TypeCheckerPhase

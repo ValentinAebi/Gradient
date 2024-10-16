@@ -1,6 +1,7 @@
 package gradcc.parsing
 
 import gradcc.lang.{Conventions, Keyword, Operator}
+import gradcc.parsing.ScannerPhase.{lowerWordRegex, upperWordRegex}
 import gradcc.{Position, Reporter, SimplePhase, parsing}
 
 import scala.util.matching.Regex
@@ -25,14 +26,14 @@ final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]
   private def regexMatcher(regex: Regex, mkTok: (str: String, pos: Position) => GradCCToken): Matcher = {
     (str: String, pos: Position) => regex.findPrefixOf(str).map(mkTok(_, pos))
   }
-
+  
   private val matchers: Seq[Matcher] =
     List(commentMatcher) ++
       Operator.values.sortBy(-_.str.length).map(operatorMatcher) ++
       Keyword.values.sortBy(-_.str.length).map(keywordMatcher) ++
       List(
-        regexMatcher("(?:[a-z]|_)(?:[A-Z]|[a-z]|[0-9]|_)*".r, LowerWordToken(_, _)),
-        regexMatcher("[A-Z](?:[A-Z]|[a-z]|[0-9]|_)*".r, UpperWordToken(_, _)),
+        regexMatcher(lowerWordRegex, LowerWordToken(_, _)),
+        regexMatcher(upperWordRegex, UpperWordToken(_, _)),
         regexMatcher("(\\s)+".r, SpaceToken(_, _)),
         regexMatcher("(\\S)+".r, ErrorToken(_, _))
       )
@@ -89,4 +90,9 @@ final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]
     def accept(str: String, pos: Position): Option[GradCCToken]
   }
 
+}
+
+object ScannerPhase {
+  val lowerWordRegex: Regex = "(?:[a-z]|_)(?:[A-Z]|[a-z]|[0-9]|_)*".r
+  val upperWordRegex: Regex = "[A-Z](?:[A-Z]|[a-z]|[0-9]|_)*".r
 }
