@@ -59,7 +59,7 @@ trait TermsProvider {
   case class RecordTypeTree(selfRef: Option[Identifier], fieldsInOrder: Seq[(NamedField, TypeTree)], override val position: Position) extends TypeShapeTree
 
   sealed trait CaptureSetTree extends Ast
-  case class ExplicitCaptureSetTree(capturedVarsInOrder: Seq[Path], override val position: Position) extends CaptureSetTree
-  case class ImplicitCaptureSetTree(override val position: Position) extends CaptureSetTree
+  case class NonRootCaptureSet(capturedVarsInOrder: Seq[Path], override val position: Position) extends CaptureSetTree
+  case class RootCaptureSet(override val position: Position) extends CaptureSetTree
   
 }

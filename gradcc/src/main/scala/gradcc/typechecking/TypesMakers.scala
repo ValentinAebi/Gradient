@@ -28,8 +28,8 @@ def mkShape(typeShapeTree: TypeShapeTree): ShapeType = typeShapeTree match {
 }
 
 def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
-  case ExplicitCaptureSetTree(capturedVarsInOrder, position) => capturedVarsInOrder.map(mkCapabilityPath).toSet
-  case ImplicitCaptureSetTree(position) => Set(RootCapability)
+  case NonRootCaptureSet(capturedVarsInOrder, position) => capturedVarsInOrder.map(mkCapabilityPath).toSet
+  case RootCaptureSet(position) => Set(RootCapability)
 }
 
 def mkCapabilityPath(capPath: Path): CapabilityPath = capPath match {

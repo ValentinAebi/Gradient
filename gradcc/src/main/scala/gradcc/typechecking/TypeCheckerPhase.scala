@@ -3,7 +3,7 @@ package gradcc.typechecking
 import gradcc.*
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
-import gradcc.typechecking.SubtypingRelation.subtypeOf
+import gradcc.typechecking.SubtypingRelation.*
 
 import scala.collection.mutable
 
@@ -21,12 +21,14 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
   }
 
   private def computeTypes(t: Term)(using ctx: Ctx): Option[Type] = ctx.types.getOrElseUpdate(t, {
+    // TODO pack and unpack
     import ctx.*
     val tpe = t match {
       case Identifier(id, position) =>
         // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
         ctx.varLookup(id)
-      case Cap(position) => ???
+      case Cap(position) =>
+        throw AssertionError("unexpected type computation on the root capability")
       case Select(owner, fieldId, position) =>
         computeTypes(owner).flatMap {
           case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(RegularField(fieldId)) =>
@@ -34,7 +36,8 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           case otherType => reportError(
             s"no field named '$fieldId' found in owner type $otherType", position)
         }
-      case Box(boxed, position) => ???
+      case Box(boxed, position) =>
+        computeTypes(boxed).map(BoxShape(_) ^ Set.empty)
       case abs@Abs(varIdent, varTypeTree, body, position) => {
         val varId = varIdent.id
         val varType = mkType(varTypeTree)
@@ -61,7 +64,15 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
             reportError(s"$callerType is not callable", position)
         }
       }
-      case Unbox(captureSet, boxed, position) => ???
+      case Unbox(captureSet, boxed, position) => {
+        val unboxCapSet = mkCaptureSet(captureSet)
+        computeTypes(boxed).flatMap {
+          case tpe@Type(shape, cSet) if cSet == unboxCapSet => Some(tpe)
+          case Type(shape, cSet) =>
+            reportError(s"illegal unboxing: the capture set ${capSetToString(cSet)} of the unboxed type" +
+              s"differs from the capture set ${capSetToString(unboxCapSet)} mentioned by the unbox term", position)
+        }
+      }
       case Let(varId, value, body, position) => {
         val valueType = computeTypes(value)
         reporter.info(s"assign ${varId.id} : ${typeDescr(valueType)}", varId.position)
@@ -77,9 +88,35 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         bodyType
       }
       case Region(position) => Some(RegionShape ^ Set(RootCapability))
-      case Deref(ref, position) => ???
-      case Assign(ref, newVal, position) => ???
-      case Ref(regionCap, initVal, position) => ???
+      case Deref(ref, position) =>
+        computeTypes(ref).flatMap {
+          case Type(RefShape(referenced), captureSet) => Some(referenced ^ Set.empty)
+          case tpe => reportError(s"illegal dereference: $tpe is not a reference", position)
+        }
+      case Assign(ref, newVal, position) =>
+        (computeTypes(ref), computeTypes(newVal)) match {
+          case (Some(Type(RefShape(referenced), _)), Some(valType)) => {
+            if valType.captureSet.isEmpty
+            then mustBeAssignable(referenced, valType.shape, position, Some(UnitShape ^ Set.empty))
+            else reportError(
+              s"illegal assignment: capture set of assigned value is not empty, please fix this by boxing it",
+              position
+            )
+          }
+          case (Some(nonRefType), _) =>
+            reportError(s"expected a reference type as assignment target, found $nonRefType", position)
+          case _ => None
+        }
+      case Ref(regionCap, initVal, position) =>
+        (computeTypes(regionCap), computeTypes(initVal)) match {
+          case (Some(Type(RegionShape, _)), Some(Type(initValShape, initValCaptureSet))) =>
+            if initValCaptureSet.isEmpty
+            then Some(RefShape(initValShape) ^ Set(mkCapabilityPath(regionCap)))
+            else reportError("reference value must have an empty capture set", position)
+          case (Some(nonRegionType), _) =>
+            reportError(s"expected a region, found $nonRegionType", position)
+          case _ => None
+        }
       case Module(regionCap, fields, position) => {
         val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
         val regionCapType = computeTypes(regionCap)
@@ -138,7 +175,20 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     }
   }
 
+  private def mustBeAssignable(expectedShape: ShapeType, actualShape: ShapeType, pos: Position, ifAssignable: => Option[Type])
+                              (using ctx: Ctx): Option[Type] = {
+    val isSub = actualShape.subshapeOf(expectedShape)
+    if (isSub) {
+      ifAssignable
+    } else {
+      ctx.reportError(s"type mismatch: expected $expectedShape, but was $actualShape", pos)
+    }
+  }
+
   private def typeDescr(optType: Option[Type]): String =
     optType.map(_.toString).getOrElse("??")
+
+  private def capSetToString(capSet: Set[Capturable]): String =
+    capSet.mkString("{", ",", "}")
 
 }

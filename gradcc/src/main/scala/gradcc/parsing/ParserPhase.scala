@@ -1,11 +1,10 @@
 package gradcc.parsing
 
-import gradcc.{Reporter, SimplePhase}
-import gradcc.*
 import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, Operator}
+import gradcc.*
 
 import scala.collection.immutable.ArraySeq
 import scala.util.parsing.combinator.Parsers
@@ -56,8 +55,6 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
   private lazy val cap: P[Cap] = kw(CapKw).map {
     case KeywordToken(kw, pos) => Cap(pos)
   }
-
-  private lazy val variable: P[Variable] = identifier OR cap
 
   private lazy val namedField: P[NamedField] = lower.map {
     case LowerWordToken(str, pos) => NamedField(str, pos)
@@ -135,8 +132,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
     case callee ~ arg => App(callee, arg, callee.position)
   }
 
-  private lazy val assignment: P[Assign] = (path ~ colon ~ equal ~ path).map {
-    case lhs ~ _ ~ _ ~ rhs => Assign(lhs, rhs, lhs.position)
+  private lazy val assignment: P[Assign] = (path ~ op(ColumnEqual) ~ path).map {
+    case lhs ~ _ ~ rhs => Assign(lhs, rhs, lhs.position)
   }
 
   private lazy val ref: P[Ref] = (path ~ dot ~ ref ~ path).map {
@@ -152,8 +149,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
 
   private lazy val topType: P[TopTypeTree] = kw(TopKw).map(top => TopTypeTree(top.pos))
 
-  private lazy val depType: P[AbsTypeTree] = (kw(FnKw) ~ openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ tpe).map {
-    case fn ~ _ ~ param ~ _ ~ paramType ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, fn.pos)
+  private lazy val depType: P[AbsTypeTree] = (openParenth ~ identifier ~ colon ~ tpe ~ closeParenth ~ op(Arrow) ~ tpe).map {
+    case opp ~ param ~ _ ~ paramType ~ _ ~ _ ~ bodyType => AbsTypeTree(param, paramType, bodyType, opp.pos)
   }
 
   private lazy val boxType: P[BoxTypeTree] = (kw(BoxKw) ~ tpe).map {
@@ -188,13 +185,14 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser"), P
     case shape ~ Some(_ ~ Some(explicitCapSet)) =>
       TypeTree(shape, Some(explicitCapSet), shape.position)
     case shape ~ Some(hat ~ None) =>
-      TypeTree(shape, Some(ImplicitCaptureSetTree(hat.pos)), shape.position)
+      TypeTree(shape, Some(RootCaptureSet(hat.pos)), shape.position)
     case shape ~ None =>
       TypeTree(shape, None, shape.position)
   }
 
-  private lazy val explicitCaptureSet: P[ExplicitCaptureSetTree] = (openBrace ~ repsep(path, comma) ~ closeBrace).map {
-    case openB ~ capPaths ~ _ => ExplicitCaptureSetTree(capPaths, openB.pos)
+  private lazy val explicitCaptureSet: P[CaptureSetTree] = (openBrace ~ (repsep(path, comma) | cap) ~ closeBrace).map {
+    case openB ~ Cap(capPos) ~ closeB => RootCaptureSet(capPos)
+    case openB ~ (capPaths: Seq[Path]) ~ _ => NonRootCaptureSet(capPaths, openB.pos)
   }
 
 

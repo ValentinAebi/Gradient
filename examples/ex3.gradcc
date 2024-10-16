@@ -1,0 +1,3 @@
+
+fn (x: Ref (u: Unit) -> Reg, y: (u: Unit) -> Unit)
+    x := y

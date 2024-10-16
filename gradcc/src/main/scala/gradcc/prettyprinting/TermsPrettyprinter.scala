@@ -121,11 +121,11 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
           pp(tpe)
         }
         add(" }")
-      case p.ExplicitCaptureSetTree(capturedVarsInOrder, position) =>
+      case p.NonRootCaptureSet(capturedVarsInOrder, position) =>
         add("^{ ")
         sepList(capturedVarsInOrder, ", ")(pp)
         add(" }")
-      case p.ImplicitCaptureSetTree(position) =>
+      case p.RootCaptureSet(position) =>
         add("^{ ").add(CapKw).add(" }")
     }
   }

@@ -117,10 +117,10 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
   }
 
   private def convertCaptureSetTree(capt: A.CaptureSetTree)(using ctx: Ctx): U.CaptureSetTree = capt match {
-    case A.ExplicitCaptureSetTree(capturedVarsInOrder, position) =>
-      U.ExplicitCaptureSetTree(capturedVarsInOrder.map(convertPath), position)
-    case A.ImplicitCaptureSetTree(position) =>
-      U.ImplicitCaptureSetTree(position)
+    case A.NonRootCaptureSet(capturedVarsInOrder, position) =>
+      U.NonRootCaptureSet(capturedVarsInOrder.map(convertPath), position)
+    case A.RootCaptureSet(position) =>
+      U.RootCaptureSet(position)
   }
 
   private case class Ctx(
