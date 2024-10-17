@@ -23,6 +23,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
 
   private def computeTypes(t: Term)(using ctx: Ctx): Option[Type] = ctx.types.getOrElseUpdate(t, {
     // TODO pack and unpack
+    // TODO double-check every typing rule
     import ctx.*
     val tpe = t match {
       case Identifier(id, position) =>
@@ -46,12 +47,9 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           AbsShape(varId, varType, bodyType) ^ cv(abs)
         }
       }
-      case recordLit@RecordLiteral(fields, position) => Some(
-        RecordShape(
-          None,
-          fields.flatMap((fld, p) => computeTypes(p).map((mkRecordField(fld), _))).toMap,
-        ) ^ cv(recordLit)
-      )
+      case recordLit@RecordLiteral(fields, position) =>
+        val fieldsShapes = fields.flatMap((fld, p) => computeTypes(p).map((mkRecordField(fld), _))).toMap
+        Some(RecordShape(None, fieldsShapes) ^ fieldsShapes.flatMap(_._2.captureSet).toSet)
       case UnitLiteral(position) => Some(UnitShape ^ Set.empty)
       case App(callee, arg, position) => {
         (computeTypes(callee), computeTypes(arg)) match {
@@ -68,10 +66,11 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Unbox(captureSet, boxed, position) => {
         val unboxCapSet = mkCaptureSet(captureSet)
         computeTypes(boxed).flatMap {
-          case tpe@Type(shape, cSet) if cSet == unboxCapSet => Some(tpe)
-          case Type(shape, cSet) =>
-            reportError(s"illegal unboxing: the capture set ${capSetToString(cSet)} of the unboxed type" +
+          case Type(BoxShape(boxed), _) if boxed.captureSet == unboxCapSet => Some(boxed)
+          case Type(BoxShape(boxed), _) =>
+            reportError(s"illegal unboxing: the capture set ${capSetToString(boxed.captureSet)} of the unboxed type " +
               s"differs from the capture set ${capSetToString(unboxCapSet)} mentioned by the unbox term", position)
+          case tpe => reportError(s"cannot unbox non-box type $tpe", position)
         }
       }
       case Let(varId, value, body, position) => {
@@ -100,7 +99,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
             if valType.captureSet.isEmpty
             then mustBeAssignable(referenced, valType.shape, position, Some(UnitShape ^ Set.empty))
             else reportError(
-              s"illegal assignment: capture set of assigned value is not empty, please fix this by boxing it",
+              s"illegal assignment: capture set ${capSetToString(valType.captureSet)} of assigned value is not empty, please fix this by boxing it",
               position
             )
           }
@@ -188,6 +187,6 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     optType.map(_.toString).getOrElse("??")
 
   private def capSetToString(capSet: Set[Capturable]): String =
-    capSet.mkString("{", ",", "}")
+    capSet.toSeq.sortBy(_.toString).mkString("{", ",", "}")
 
 }

@@ -43,7 +43,8 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         add(" ")
         pp(arg)
       case p.Unbox(captureSet, boxed, position) =>
-        add(UnboxKw).add(" ")
+        pp(captureSet)
+        add(" ").add(UnboxKw).add(" ")
         pp(boxed)
       case p.Let(varId, value, body, position) =>
         add(LetKw).add(" ")
@@ -65,7 +66,7 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         pp(newVal)
       case p.Ref(regionCap, initVal, position) =>
         pp(regionCap)
-        add(".").add(RefLKw).add(" ")
+        add(".").add(RefKw).add(" ")
         pp(initVal)
       case p.Module(regionCap, fields, position) =>
         add(ModKw).add("(")
@@ -80,10 +81,13 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
       case p.NamedField(fieldName, position) =>
         add(fieldName)
       case p.Reg(position) =>
-        add(RegLKw)
+        add(RegKw)
       case p.TypeTree(shape, captureSet, position) =>
         pp(shape)
-        captureSet.foreach(pp)
+        captureSet.foreach { cs =>
+          add("^")
+          pp(cs)
+        }
       case p.TopTypeTree(position) =>
         add(TopKw)
       case p.AbsTypeTree(varId, varType, bodyType, position) =>
@@ -99,10 +103,10 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
       case p.UnitTypeTree(position) =>
         add(UnitKw)
       case p.RefTypeTree(referencedType, position) =>
-        add(RefUKw).add(" ")
+        add(RefKw).add(" ")
         pp(referencedType)
       case p.RegTypeTree(position) =>
-        add(RegUKw)
+        add(RegKw)
       case p.RecordTypeTree(selfRef, fieldsInOrder, position) =>
         selfRef.foreach { selfRef =>
           add(SelfKw).add(" ")
@@ -117,11 +121,11 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         }
         add(" }")
       case p.NonRootCaptureSet(capturedVarsInOrder, position) =>
-        add("^{ ")
+        add("{")
         sepList(capturedVarsInOrder, ", ")(pp)
-        add(" }")
+        add("}")
       case p.RootCaptureSet(position) =>
-        add("^{ ").add(CapKw).add(" }")
+        add("{").add(CapKw).add("}")
     }
   }
 

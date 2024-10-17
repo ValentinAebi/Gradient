@@ -30,6 +30,11 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
       case _ => false
     }
 
+    def expectOperator[T](op: Operator, tokens: Tokens, msg: => String)(result: => T): (T, Tokens) = tokens match {
+      case OperatorToken(`op`, _) :: rem => (result, rem)
+      case _ => reporter.fatal(msg, tokens.headPos)
+    }
+
     def parsePath(tokens: Tokens, errorMsg: => String): (Path, Tokens) = tokens match {
       case LowerWordToken(rootId, pos) :: rem => parsePathFollow(rem, Identifier(rootId, pos))
       case _ => reporter.fatal(errorMsg, tokens.headPos)
@@ -50,10 +55,10 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
     }
 
     def parseDotRefFollow(tokens: Tokens, lhs: Path): (Ref, Tokens) = tokens match {
-      case OperatorToken(Dot, dotPos) :: KeywordToken(RefLKw, _) :: rem1 =>
-        val (rhs, rem2) = parsePath(rem1, s"expected a path after $RefLKw")
+      case OperatorToken(Dot, dotPos) :: KeywordToken(RefKw, _) :: rem1 =>
+        val (rhs, rem2) = parsePath(rem1, s"expected a path after $RefKw")
         (Ref(lhs, rhs, dotPos), rem2)
-      case _ => reporter.fatal(s"expected '.$RefLKw'", tokens.headPos)
+      case _ => reporter.fatal(s"expected '.$RefKw'", tokens.headPos)
     }
 
     def parseValueOpt(tokens: Tokens): Option[(Value, Tokens)] = tokens match {
@@ -65,14 +70,13 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
         val (abs, rem2) = parseFnFollow(rem1, true, parseTerm)
         (abs.asInstanceOf[Abs], rem2)
       }
-      case OperatorToken(OpenBrace, openBracePos) :: rem1 => Some {
+      case OperatorToken(OpenBrace, openBracePos) :: rem1 =>
         val (fields, rem2) = parseCommaSeparatedFieldValuePairs(rem1)
         rem2 match {
           case OperatorToken(CloseBrace, _) :: rem3 =>
-            (RecordLiteral(fields, openBracePos), rem3)
-          case _ => reporter.fatal("expected '}'", rem2.headPos)
+            Some((RecordLiteral(fields, openBracePos), rem3))
+          case _ => None
         }
-      }
       case OperatorToken(OpenParenth, pos) :: OperatorToken(CloseParenth, _) :: rem =>
         Some((UnitLiteral(pos), rem))
       case _ => None
@@ -133,7 +137,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
           rem2 match {
             case OperatorToken(CloseParenth, _) :: rem3 =>
               (Some(Identifier(varId, varPos), tpe), rem3)
-            case _ => (None, rem2)
+            case _ =>
+              reporter.fatal("unclosed parenthesis after argument", rem2.headPos)
           }
         case _ => (None, tokens)
       }
@@ -187,11 +192,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
             rem3 match {
               case OperatorToken(CloseParenth, _) :: OperatorToken(OpenBrace, _) :: rem4 =>
                 val (fields, rem5) = parseCommaSeparatedFieldValuePairs(rem4)
-                rem5 match {
-                  case OperatorToken(CloseBrace, _) :: rem6 =>
-                    (Module(region, fields, modPos), rem6)
-                  case _ =>
-                    reportMalformedModule(rem5)
+                expectOperator(CloseBrace, rem5, reportMalformedModule(rem5)) {
+                  Module(region, fields, modPos)
                 }
               case _ => reportMalformedModule(rem3)
             }
@@ -218,72 +220,100 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
                   (Unbox(captureSetTree, p, unboxPos), rem4)
                 case _ => reporter.fatal("malformed unbox term", rem2.headPos)
               }
+            case OperatorToken(OpenParenth, _) :: rem1 =>
+              val (term, rem2) = parseTerm(rem1)
+              expectOperator(CloseParenth, rem2, "unclosed parenthesis")(term)
             case _ => reporter.fatal("expected a term", tokens.headPos)
         }
 
     }
 
-    def parseType(tokens: Tokens): (TypeTree, Tokens) = {
-      val (shape, rem1) = parseShape(tokens)
-      rem1 match {
-        case OperatorToken(Hat, hatPos) :: OperatorToken(OpenBrace, _) :: rem2 =>
-          val (paths, rem3) = parseCommaSeparatedPaths(rem2)
-          rem3 match {
-            case OperatorToken(CloseBrace, _) :: rem4 =>
-              (TypeTree(shape, Some(NonRootCaptureSet(paths, hatPos)), shape.position), rem4)
-            case _ =>
-              reporter.fatal("missing closing brace after capture set", rem3.headPos)
-          }
-        case OperatorToken(Hat, hatPos) :: rem2 =>
-          (TypeTree(shape, Some(RootCaptureSet(hatPos)), shape.position), rem2)
-        case _ =>
-          (TypeTree(shape, None, shape.position), rem1)
+    def parseType(tokens: List[GradCCToken]): (TypeTree, Tokens) = {
+      val (t, rem) = parseShapeOrType(tokens)
+      t match {
+        case typeTree: TypeTree => (typeTree, rem)
+        case shapeTree: TypeShapeTree => (TypeTree(shapeTree, None, shapeTree.position), rem)
       }
     }
 
-    def parseShape(tokens: Tokens): (TypeShapeTree, Tokens) = {
+    def parseShapeOrType(tokens: Tokens): (TypeShapeTree | TypeTree, Tokens) = {
       parseVarColonTypeBetweenParenthesesOpt(tokens) match {
-        case (Some(varIdent, varType), rem1) =>
-          rem1 match {
-            case OperatorToken(Arrow, _) :: rem2 =>
-              val (resType, rem3) = parseType(rem2)
-              (AbsTypeTree(varIdent, varType, resType, tokens.head.pos), rem3)
-            case _ => reporter.fatal(s"expected $Arrow", rem1.headPos)
+        case (Some((varId, varType)), OperatorToken(Arrow, _) :: OperatorToken(OpenBrace, openBrPos) :: rem1) =>
+          val (paths, rem2) = parseCommaSeparatedPaths(rem1)
+          rem2 match {
+            case OperatorToken(CloseBrace, _) :: rem3 =>
+              val (resType, rem4) = parseType(rem3)
+              (TypeTree(
+                AbsTypeTree(varId, varType, resType, tokens.head.pos),
+                Some(NonRootCaptureSet(paths, openBrPos)),
+                tokens.head.pos
+              ), rem4)
+            case _ => reporter.fatal("unclosed capture set", rem2.headPos)
           }
+        case (Some((varId, varType)), OperatorToken(Arrow, _) :: rem1) =>
+          val (resType, rem2) = parseType(rem1)
+          maybeWithCaptureSet(AbsTypeTree(varId, varType, resType, tokens.head.pos), rem2)
         case _ => tokens match {
           case KeywordToken(TopKw, pos) :: rem =>
-            (TopTypeTree(pos), rem)
+            maybeWithCaptureSet(TopTypeTree(pos), rem)
           case KeywordToken(BoxKw, pos) :: rem1 =>
             val (boxedType, rem2) = parseType(rem1)
-            (BoxTypeTree(boxedType, pos), rem2)
+            forbidCaptureSet(BoxTypeTree(boxedType, pos), rem2, "a boxed type cannot have a capture set")
           case KeywordToken(UnitKw, pos) :: rem =>
-            (UnitTypeTree(pos), rem)
-          case KeywordToken(RefUKw, pos) :: rem1 =>
-            val (shape, rem2) = parseShape(rem1)
-            (RefTypeTree(shape, pos), rem2)
-          case KeywordToken(RegUKw, pos) :: rem =>
-            (RegTypeTree(pos), rem)
+            forbidCaptureSet(UnitTypeTree(pos), rem, s"$UnitKw cannot have a capture set")
+          case KeywordToken(RefKw, pos) :: rem1 =>
+            val (shape, rem2) = {
+              val (t, rem) = parseShapeOrType(rem1)
+              (forbidCapture(t, "only shape types can be turned into references, " +
+                s"but a non-empty capture set was found"), rem)
+            }
+            maybeWithCaptureSet(RefTypeTree(shape, pos), rem2)
+          case KeywordToken(RegKw, pos) :: rem =>
+            maybeWithCaptureSet(RegTypeTree(pos), rem)
           case KeywordToken(SelfKw, selfPos) :: rem1 =>
             rem1 match {
               case LowerWordToken(selfId, idPos) :: KeywordToken(InKw, _) :: OperatorToken(OpenBrace, _) :: rem2 =>
                 val (fieldTypes, rem3) = parseCommaSeparatedFieldTypePairs(rem2)
-                rem3 match {
-                  case OperatorToken(CloseBrace, _) :: rem4 =>
-                    (RecordTypeTree(Some(Identifier(selfId, idPos)), fieldTypes, selfPos), rem4)
-                  case _ => reporter.fatal("unclosed fields list", rem3.headPos)
+                val (rtt, rem4) = expectOperator(CloseBrace, rem3, "unclosed fields list in record shape") {
+                  RecordTypeTree(Some(Identifier(selfId, idPos)), fieldTypes, selfPos)
                 }
+                maybeWithCaptureSet(rtt, rem4)
               case _ => reporter.fatal("malformed self-referencing record type", rem1.headPos)
             }
           case OperatorToken(OpenBrace, openBrPos) :: rem1 =>
             val (fieldTypes, rem2) = parseCommaSeparatedFieldTypePairs(rem1)
-            rem2 match {
-              case OperatorToken(CloseBrace, _) :: rem2 =>
-                (RecordTypeTree(None, fieldTypes, openBrPos), rem2)
-              case _ => reporter.fatal("unclosed fields list", rem2.headPos)
+            val (rtt, rem4) = expectOperator(CloseBrace, rem2, "unclosed fields list in record shape") {
+              RecordTypeTree(None, fieldTypes, openBrPos)
             }
+            maybeWithCaptureSet(rtt, rem4)
           case tokens => reporter.fatal("expected a type shape", tokens.headPos)
         }
       }
+    }
+
+    def maybeWithCaptureSet(shape: TypeShapeTree, tokens: Tokens): (TypeShapeTree | TypeTree, Tokens) = tokens match {
+      case OperatorToken(Hat, hatPos) :: OperatorToken(OpenBrace, _) :: rem1 =>
+        val (paths, rem2) = parseCommaSeparatedPaths(rem1)
+        expectOperator(CloseBrace, rem2, "unclosed capture set") {
+          TypeTree(shape, Some(NonRootCaptureSet(paths, hatPos)), shape.position)
+        }
+      case OperatorToken(Hat, hatPos) :: rem =>
+        (TypeTree(shape, Some(RootCaptureSet(hatPos)), shape.position), rem)
+      case _ => (shape, tokens)
+    }
+
+    def forbidCaptureSet(shape: TypeShapeTree, tokens: Tokens, msg: => String): (TypeShapeTree, Tokens) = {
+      val (t, rem) = maybeWithCaptureSet(shape, tokens)
+      (forbidCapture(t, msg), rem)
+    }
+
+    def forbidCapture(t: (TypeShapeTree | TypeTree), msg: => String): TypeShapeTree = t match {
+      case typeTree: TypeTree =>
+        if (typeTree.captureSet.nonEmpty) {
+          reporter.error(msg, typeTree.captureSet.head.position)
+        }
+        typeTree.shape
+      case shapeTree: TypeShapeTree => shapeTree
     }
 
     parseTerm(filterIsCoreToken(in)) match {

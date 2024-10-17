@@ -19,7 +19,7 @@ import scala.util.Using
 
   ///////////////////////////////////////////////////////////
   val action = Action.Typecheck
-  val path = "examples/ex1.gradcc"
+  val path = "examples/ex2.gradcc"
   ///////////////////////////////////////////////////////////
 
   val str = Using(Source.fromFile(path))(_.getLines().mkString("\n")).get
