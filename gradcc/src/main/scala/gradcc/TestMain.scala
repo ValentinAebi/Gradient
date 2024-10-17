@@ -19,7 +19,7 @@ import scala.util.Using
 
   ///////////////////////////////////////////////////////////
   val action = Action.Typecheck
-  val path = "examples/ex3.gradcc"
+  val path = "examples/ex1.gradcc"
   ///////////////////////////////////////////////////////////
 
   val str = Using(Source.fromFile(path))(_.getLines().mkString("\n")).get
@@ -42,12 +42,12 @@ import scala.util.Using
       case Success(value) =>
         s"\n$value"
       case Fatal(fatalErrorException) =>
-        s"Fatal error: ${fatalErrorException.msg} at ${fatalErrorException.pos.getOrElse("??")}"
+        fatalErrorException.toString
       case NonFatal =>
         "Failure: non-fatal error(s) terminated the pipeline"
   )
   println()
-  if (reporter.somethingToReport) {
+  if (reporter.somethingReported) {
     println(reporter.getStringReport)
   } else {
     println("No error found")

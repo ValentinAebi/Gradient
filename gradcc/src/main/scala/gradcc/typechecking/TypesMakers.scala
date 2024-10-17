@@ -3,7 +3,7 @@ package gradcc.typechecking
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 
-def mkRecordField(fld: Field): RecordField = fld match {
+def mkRecordField(fld: FieldTree): RecordField = fld match {
   case NamedField(fieldName, position) => RegularField(fieldName)
   case Reg(position) => RegionField
 }

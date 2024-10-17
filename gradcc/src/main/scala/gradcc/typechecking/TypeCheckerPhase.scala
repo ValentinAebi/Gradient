@@ -104,7 +104,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
               position
             )
           }
-          case (Some(nonRefType), _) =>
+          case (Some(nonRefType), Some(_)) =>
             reportError(s"expected a reference type as assignment target, found $nonRefType", position)
           case _ => None
         }

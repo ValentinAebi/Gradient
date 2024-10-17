@@ -1,5 +1,7 @@
 package gradcc
 
+import gradcc.Reporter.{Entry, FatalErrorException}
+
 import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.collection.mutable.ListBuffer
 
@@ -12,11 +14,13 @@ final class Reporter {
 
   private var stopFlag: Boolean = false
 
-  def somethingToReport: Boolean = errors.nonEmpty || warnings.nonEmpty || infos.nonEmpty
+  def somethingReported: Boolean = stopFlag || warnings.nonEmpty || infos.nonEmpty
 
   def fatal(msg: String, pos: Option[Position]): Nothing = {
     stopFlag = true
-    throw FatalErrorException(msg, pos)
+    val entry = Entry(msg, pos)
+    errors.addOne(entry)
+    throw FatalErrorException(entry)
   }
 
   def fatal(msg: String, pos: Position): Nothing = {
@@ -70,10 +74,19 @@ final class Reporter {
     }
   }
 
-  private final case class Entry(msg: String, pos: Option[Position]) {
+}
+
+object Reporter {
+
+  private[Reporter] final case class Entry(msg: String, pos: Option[Position]) {
     override def toString: String = s"[${pos.getOrElse("??")}] $msg"
   }
 
+  final case class FatalErrorException private[Reporter](private val entry: Entry) extends Exception {
+    export entry.{msg, pos}
+
+    override def toString: String = entry.toString
+  }
+  
 }
 
-final case class FatalErrorException(msg: String, pos: Option[Position]) extends Exception

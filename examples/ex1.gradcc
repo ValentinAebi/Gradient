@@ -1,5 +1,5 @@
 
 fn (x: Reg)
   let r = x in
-     let x = fn (x: Unit, y: Reg^{x}, r: Reg^, g: fn (x: Unit) Reg) g x
+     let x = fn (x: Unit)(y: Reg^{x})(r: Reg^)(g: (x: Unit) -> Reg) g x
      in mod (r) { a = x, b = r }

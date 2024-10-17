@@ -1,7 +1,7 @@
 package gradcc.renaming
 
-import gradcc.{Position, Reporter, SimplePhase}
 import gradcc.asts.{UniqueVarId, AmbiguouslyNamedTerms as A, UniquelyNamedTerms as U}
+import gradcc.{Position, Reporter, SimplePhase}
 
 import scala.collection.mutable.Map as MutMap
 
@@ -10,7 +10,7 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
 
   override protected def runImpl(in: A.Term, reporter: Reporter): U.Term =
     convertTerm(in)(using Ctx(Map.empty, MutMap.empty, reporter))
-  
+
   private def convertTerm(term: A.Term)(using ctx: Ctx): U.Term = term match {
     case path: A.Path =>
       convertPath(path)
@@ -71,14 +71,9 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
     U.Identifier(ctx.getCurrentIdFor(id, position), position)
   }
 
-  private def convertField(fld: A.Field): U.Field = fld match {
-    case namedField: A.NamedField => convertNamedField(namedField)
+  private def convertField(fld: A.FieldTree): U.FieldTree = fld match {
+    case A.NamedField(fieldName, position) => U.NamedField(fieldName, position)
     case A.Reg(position) => U.Reg(position)
-  }
-
-  private def convertNamedField(fld: A.NamedField): U.NamedField = {
-    val A.NamedField(fieldName, position) = fld
-    U.NamedField(fieldName, position)
   }
 
   private def convertType(tpe: A.TypeTree)(using ctx: Ctx): U.TypeTree = {
@@ -109,7 +104,7 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
       val updatedCtx = selfRef.map(selfRef => ctx.withNewId(selfRef.id)).getOrElse(ctx)
       U.RecordTypeTree(
         selfRef.map(convertIdentifier(_)(using updatedCtx)),
-        fieldsInOrder.map((fld, tpe) => (convertNamedField(fld), convertType(tpe)(using updatedCtx))),
+        fieldsInOrder.map((fld, tpe) => (convertField(fld), convertType(tpe)(using updatedCtx))),
         position
       )
   }
@@ -125,7 +120,7 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
                           bindingsInScope: Map[String, UniqueVarId],
                           renamingIndices: MutMap[String, Int],
                           reporter: Reporter
-                        ){
+                        ) {
 
     def withNewId(s: String): Ctx = {
       val idx = renamingIndices.getOrElse(s, 0)

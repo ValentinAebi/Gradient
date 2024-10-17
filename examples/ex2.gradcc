@@ -1,16 +1,3 @@
-let newLogger = fn (fs: Fs^)
-  let r = region in
-  let _log = fn (msg : String ) = ... in
-  mod (r) { log = _log }
-in
 
-let newMain = fn (fs: Fs^)(net: Net^)
-  let r = region in
-  let _main = fn (u: Unit)
-    let logger = newLogger fs in ...
-  in mod (r) { main = _main }
-in
-
-// initialize Main & run the program
-let main = newMain fs net in
-main.main()
+fn (x: Ref (u: Unit) -> Reg^)(y: (u: Unit) -> Reg)
+    let v = y in x := v

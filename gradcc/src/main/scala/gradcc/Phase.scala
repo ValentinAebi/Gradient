@@ -1,5 +1,7 @@
 package gradcc
 
+import gradcc.Reporter.FatalErrorException
+
 sealed trait Phase[-In, +Out] {
   topLevelPhase =>
 
