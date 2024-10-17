@@ -20,13 +20,22 @@ final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]
   }
 
   private def keywordMatcher(keyword: Keyword): Matcher = {
-    (str: String, pos: Position) => if str.startsWith(keyword.str) then Some(KeywordToken(keyword, pos)) else None
+    val lowerKw = keyword.str.toLowerCase
+    (str: String, pos: Position) =>
+      val lowerStr = str.toLowerCase
+      if lowerStr.startsWith(lowerKw) && hasNoMatchLongerThanKeyword(lowerKw, lowerStr)
+      then Some(KeywordToken(keyword, pos))
+      else None
+  }
+
+  private def hasNoMatchLongerThanKeyword(lowerKw: String, str: Code) = {
+    lowerWordRegex.findPrefixOf(str.replaceFirst(lowerKw, "a")).get.length == 1
   }
 
   private def regexMatcher(regex: Regex, mkTok: (str: String, pos: Position) => GradCCToken): Matcher = {
     (str: String, pos: Position) => regex.findPrefixOf(str).map(mkTok(_, pos))
   }
-  
+
   private val matchers: Seq[Matcher] =
     List(commentMatcher) ++
       Operator.values.sortBy(-_.str.length).map(operatorMatcher) ++
@@ -78,7 +87,7 @@ final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]
         rem = rem.substring(len)
         lastLine = line
       }
-      if (lineNumber == lastLineIdx){
+      if (lineNumber == lastLineIdx) {
         tokens.addOne(EndOfFileToken(Position(filename, lineNumber, columnNumber, lastLine)))
       }
       lineNumber += 1
