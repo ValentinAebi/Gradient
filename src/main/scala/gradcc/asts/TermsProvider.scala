@@ -1,15 +1,16 @@
 package gradcc.asts
 
 import gradcc.Position
-import gradcc.lang.RecordField
 
 trait TermsProvider {
 
   private val disambiguationMarker: Char = '$'
   
   type VarId
+  type R[+T <: Term]
 
   def str(varId: VarId): String
+  def print[T <: Term](r: R[T], printT: T => Unit, printStr: String => Unit): Unit
 
   sealed trait Ast {
     val position: Position
@@ -24,7 +25,7 @@ trait TermsProvider {
     override def description: String = str(id)
   }
   case class Cap(override val position: Position) extends Variable
-  case class Select(lhs: Path, field: FieldTree, override val position: Position) extends Path {
+  case class Select(lhs: R[Path], field: FieldTree, override val position: Position) extends Path {
     override def description: String = s".$field"
   }
 
@@ -33,19 +34,19 @@ trait TermsProvider {
   case class RegFieldTree(override val position: Position) extends FieldTree
 
   sealed trait Value extends Term
-  case class Box(boxed: Path, override val position: Position) extends Value
-  case class Abs(varId: Identifier, tpe: TypeTree, body: Term, override val position: Position) extends Value
-  case class RecordLiteral(fields: Seq[(FieldTree, Path)], override val position: Position) extends Value
+  case class Box(boxed: R[Path], override val position: Position) extends Value
+  case class Abs(varId: Identifier, tpe: TypeTree, body: R[Term], override val position: Position) extends Value
+  case class RecordLiteral(fields: Seq[(FieldTree, R[Path])], override val position: Position) extends Value
   case class UnitLiteral(override val position: Position) extends Value
   
-  case class App(callee: Path, arg: Path, override val position: Position) extends Term
-  case class Unbox(captureSet: CaptureSetTree, boxed: Path, override val position: Position) extends Term
-  case class Let(varId: Identifier, value: Term, typeAnnot: Option[TypeTree], body: Term, override val position: Position) extends Term
+  case class App(callee: R[Path], arg: R[Path], override val position: Position) extends Term
+  case class Unbox(captureSet: CaptureSetTree, boxed: R[Path], override val position: Position) extends Term
+  case class Let(varId: R[Identifier], value: R[Term], typeAnnot: Option[TypeTree], body: R[Term], override val position: Position) extends Term
   case class Region(override val position: Position) extends Term
-  case class Deref(ref: Path, override val position: Position) extends Term
-  case class Assign(ref: Path, newVal: Path, override val position: Position) extends Term
-  case class Ref(regionCap: Path, initVal: Path, override val position: Position) extends Term
-  case class Module(regionCap: Path, fields: Seq[(FieldTree, Path)], override val position: Position) extends Term
+  case class Deref(ref: R[Path], override val position: Position) extends Term
+  case class Assign(ref: R[Path], newVal: R[Path], override val position: Position) extends Term
+  case class Ref(regionCap: R[Path], initVal: R[Path], override val position: Position) extends Term
+  case class Module(regionCap: R[Path], fields: Seq[(FieldTree, R[Path])], override val position: Position) extends Term
 
   case class TypeTree(shape: TypeShapeTree, captureSet: Option[CaptureSetTree], override val position: Position) extends Ast
 
@@ -60,7 +61,7 @@ trait TermsProvider {
   case class RecordTypeTree(selfRef: Option[Identifier], fieldsInOrder: Seq[(FieldTree, TypeTree)], override val position: Position) extends TypeShapeTree
 
   sealed trait CaptureSetTree extends Ast
-  case class NonRootCaptureSet(capturedVarsInOrder: Seq[Path], override val position: Position) extends CaptureSetTree
+  case class NonRootCaptureSet(capturedVarsInOrder: Seq[R[Path]], override val position: Position) extends CaptureSetTree
   case class RootCaptureSet(override val position: Position) extends CaptureSetTree
   
 }

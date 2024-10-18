@@ -19,7 +19,7 @@ import scala.util.Using
 
   ///////////////////////////////////////////////////////////
   val action = Action.Typecheck
-  val path = "examples/ex3.gradcc"
+  val path = "examples/ex5.gradcc"
   ///////////////////////////////////////////////////////////
 
   val str = Using(Source.fromFile(path))(_.getLines().mkString("\n")).get
@@ -29,7 +29,8 @@ import scala.util.Using
       .andThen(ParserPhase())
       .andThen(RenamerPhase())
       .andThen(
-        if action == Action.Prettyprint then PrettyprinterPhase(UniquelyNamedTerms)
+        if action == Action.Prettyprint
+        then PrettyprinterPhase(UniquelyNamedTerms)
         else TypeCheckerPhase()
       )
   val res = pipeline.run((str, path), reporter)

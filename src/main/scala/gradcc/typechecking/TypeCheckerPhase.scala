@@ -10,6 +10,7 @@ import gradcc.typechecking.SubtypingRelation.*
 
 import scala.collection.mutable
 
+// TODO try to output TypedTerms
 
 final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typechecker") {
   private val varCreator = SyntheticVarCreator()
