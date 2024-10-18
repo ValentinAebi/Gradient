@@ -1,6 +1,7 @@
 package gradcc.asts
 
 import gradcc.Position
+import gradcc.lang.RecordField
 
 trait TermsProvider {
 
@@ -23,13 +24,13 @@ trait TermsProvider {
     override def description: String = str(id)
   }
   case class Cap(override val position: Position) extends Variable
-  case class Select(lhs: Path, select: String, override val position: Position) extends Path {
-    override def description: String = s".$select"
+  case class Select(lhs: Path, field: FieldTree, override val position: Position) extends Path {
+    override def description: String = s".$field"
   }
 
   sealed trait FieldTree extends Ast
-  case class NamedField(fieldName: String, override val position: Position) extends FieldTree
-  case class Reg(override val position: Position) extends FieldTree
+  case class NamedFieldTree(fieldName: String, override val position: Position) extends FieldTree
+  case class RegFieldTree(override val position: Position) extends FieldTree
 
   sealed trait Value extends Term
   case class Box(boxed: Path, override val position: Position) extends Value

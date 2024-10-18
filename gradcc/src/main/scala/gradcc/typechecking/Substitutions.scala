@@ -38,7 +38,6 @@ def substitute(capabilityPath: CapabilityPath)(using subst: Map[Capturable, Capa
     capabilityPath match {
       case capVar: CapVar => capVar
       case CapPath(lhs, select) => CapPath(substitute(lhs), select)
-      case RegPath(lhs) => RegPath(substitute(lhs))
     }
   })
 }

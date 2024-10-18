@@ -1,0 +1,5 @@
+
+let r = region in
+    let f = fn (u: Unit) r in
+        let s = { a = f } in
+            s.reg

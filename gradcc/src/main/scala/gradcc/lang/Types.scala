@@ -27,16 +27,10 @@ case class CapVar(root: UniqueVarId) extends CapabilityPath {
   override def toString: String = root.toString
 }
 
-case class CapPath(lhs: CapabilityPath, select: String) extends CapabilityPath {
+case class CapPath(lhs: CapabilityPath, field: RecordField) extends CapabilityPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
 
-  override def toString: String = s"$lhs.$select"
-}
-
-case class RegPath(lhs: CapabilityPath) extends CapabilityPath {
-  override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
-
-  override def toString: String = s"$lhs.reg"
+  override def toString: String = s"$lhs.$field"
 }
 
 case object RootCapability extends Capturable {
@@ -81,14 +75,4 @@ case class RecordShape(selfRef: Option[UniqueVarId], fields: Map[RecordField, Ty
   override def toString: String =
     selfRef.map(s => s"self $s in ").getOrElse("") ++
       s"{${fields.toSeq.map((fld, tpe) => s"$fld : $tpe").mkString(", ")}}"
-}
-
-sealed trait RecordField
-
-case class RegularField(id: String) extends RecordField {
-  override def toString: String = id
-}
-
-case object RegionField extends RecordField {
-  override def toString: String = "reg"
 }

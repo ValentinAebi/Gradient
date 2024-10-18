@@ -14,9 +14,9 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         add(p.str(id))
       case p.Cap(position) =>
         add(CapKw)
-      case p.Select(root, select, position) =>
+      case p.Select(root, field, position) =>
         pp(root)
-        add(".").add(select)
+        add(".").add(field.toString)
       case p.Box(boxed, position) =>
         add(BoxKw).add(" ")
         pp(boxed)
@@ -78,9 +78,9 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
           pp(v)
         }
         add(" }")
-      case p.NamedField(fieldName, position) =>
+      case p.NamedFieldTree(fieldName, position) =>
         add(fieldName)
-      case p.Reg(position) =>
+      case p.RegFieldTree(position) =>
         add(RegKw)
       case p.TypeTree(shape, captureSet, position) =>
         pp(shape)

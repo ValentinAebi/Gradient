@@ -25,12 +25,11 @@ private[typechecking] case class Ctx(store: Store, types: TermsTypes, reporter: 
     case CapPath(lhs, select) =>
       pathLookup(lhs).flatMap {
         case Type(RecordShape(selfRef, fields), _) =>
-          fields.get(RegularField(select)).map { fieldType =>
+          fields.get(select).map { fieldType =>
             selfRef.map(selfRef => substitute(fieldType)(using Map(CapVar(selfRef) -> lhs))).getOrElse(fieldType)
           }
         case _ => None
       }
-    case RegPath(lhs) => Some(Type(RegionShape, Set(RootCapability)))
   }
 
   def reportError(msg: String, pos: Position): None.type = {

@@ -64,6 +64,7 @@ final class MultiPhase[In, Out](unaryPhase: Phase[In, Out]) extends Phase[Seq[In
 }
 
 sealed trait PhaseResult[+T] {
+  def isSuccess: Boolean = isInstanceOf[Success[?]]
   def resultOrThrow(): T
 }
 

@@ -63,7 +63,7 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
 
   private def convertPath(path: A.Path)(using ctx: Ctx): U.Path = path match {
     case id: A.Identifier => convertIdentifier(id)
-    case A.Select(root, select, position) => U.Select(convertPath(root), select, position)
+    case A.Select(root, fld, position) => U.Select(convertPath(root), convertField(fld), position)
   }
 
   private def convertIdentifier(ident: A.Identifier)(using ctx: Ctx): U.Identifier = {
@@ -72,8 +72,8 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
   }
 
   private def convertField(fld: A.FieldTree): U.FieldTree = fld match {
-    case A.NamedField(fieldName, position) => U.NamedField(fieldName, position)
-    case A.Reg(position) => U.Reg(position)
+    case A.NamedFieldTree(fieldName, position) => U.NamedFieldTree(fieldName, position)
+    case A.RegFieldTree(position) => U.RegFieldTree(position)
   }
 
   private def convertType(tpe: A.TypeTree)(using ctx: Ctx): U.TypeTree = {

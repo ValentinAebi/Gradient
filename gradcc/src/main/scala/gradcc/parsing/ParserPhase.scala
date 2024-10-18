@@ -5,7 +5,7 @@ import gradcc.asts.AmbiguouslyNamedTerms
 import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
-import gradcc.lang.{Keyword, Operator}
+import gradcc.lang.{Keyword, NamedField, Operator, RegionField}
 
 import scala.annotation.tailrec
 
@@ -42,8 +42,10 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
 
     @tailrec
     def parsePathFollow(tokens: Tokens, acc: Path): (Path, Tokens) = tokens match {
-      case OperatorToken(Dot, pos) :: LowerWordToken(fld, _) :: rem =>
-        parsePathFollow(rem, Select(acc, fld, pos))
+      case OperatorToken(Dot, dotPos) :: LowerWordToken(fld, fldPos) :: rem =>
+        parsePathFollow(rem, Select(acc, NamedFieldTree(fld, fldPos), dotPos))
+      case OperatorToken(Dot, dotPos) :: KeywordToken(RegKw, fldPos) :: rem =>
+        parsePathFollow(rem, Select(acc, RegFieldTree(fldPos), dotPos))
       case _ => (acc, tokens)
     }
 
@@ -95,7 +97,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
     def parseCommaSeparatedFieldValuePairs(tokens: Tokens): (List[(FieldTree, Path)], Tokens) = tokens match {
       case LowerWordToken(fld, fldPos) :: OperatorToken(Equal, _) :: rem1 =>
         val r2@(p, rem2) = parsePath(rem1, s"expected a path after $Equal")
-        val head = (NamedField(fld, fldPos), p)
+        val head = (NamedFieldTree(fld, fldPos), p)
         rem2 match {
           case OperatorToken(Comma, _) :: rem3 =>
             val (tail, rem4) = parseCommaSeparatedFieldValuePairs(rem3)
@@ -105,10 +107,10 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
       case _ => (Nil, tokens)
     }
 
-    def parseCommaSeparatedFieldTypePairs(tokens: Tokens): (List[(NamedField, TypeTree)], Tokens) = tokens match {
+    def parseCommaSeparatedFieldTypePairs(tokens: Tokens): (List[(NamedFieldTree, TypeTree)], Tokens) = tokens match {
       case LowerWordToken(fld, fldPos) :: OperatorToken(Colon, _) :: rem1 =>
         val (tpe, rem2) = parseType(rem1)
-        val head = (NamedField(fld, fldPos), tpe)
+        val head = (NamedFieldTree(fld, fldPos), tpe)
         rem2 match {
           case OperatorToken(Comma, _) :: rem3 =>
             val (tail, rem4) = parseCommaSeparatedFieldTypePairs(rem3)
@@ -158,7 +160,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
         } else res1
 
       // let-binding
-      case KeywordToken(LetKw, letPos) :: rem1 =>
+      case KeywordToken(LetKw, letPos) :: rem1 => {
         def reportMalformedLet(remTokens: Tokens) =
           reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", remTokens.headPos)
 
@@ -173,6 +175,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
             }
           case _ => reportMalformedLet(rem1)
         }
+      }
 
       // region
       case KeywordToken(RegionKw, pos) :: rem => (Region(pos), rem)
@@ -183,7 +186,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
         (Deref(p, pos), rem2)
 
       // module
-      case KeywordToken(ModKw, modPos) :: rem1 =>
+      case KeywordToken(ModKw, modPos) :: rem1 => {
         def reportMalformedModule(remTokens: Tokens) = reporter.fatal("malformed module", remTokens.headPos)
 
         rem1 match {
@@ -199,33 +202,57 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
             }
           case _ => reportMalformedModule(rem1)
         }
+      }
 
-      // special case, ambiguous between record literal and empty capture set for unboxing
-      case OperatorToken(OpenBrace, pos) :: OperatorToken(CloseBrace, _) :: rem =>
+      // empty record
+      case OperatorToken(OpenBrace, pos) :: OperatorToken(CloseBrace, _) :: rem => {
         if (startsWithKeyword(UnboxKw, rem)) {
           reporter.fatal("capture set cannot be empty for unbox form", pos)
         }
         (RecordLiteral(Seq.empty, pos), rem)
+      }
 
-      // remaining cases: value or unboxing
-      case tokens =>
-        parseValueOpt(tokens).getOrElse {
-          tokens match
-            case OperatorToken(OpenBrace, openBracePos) :: rem1 =>
-              val (capturedPaths, rem2) = parseCommaSeparatedPaths(rem1)
-              val captureSetTree = NonRootCaptureSet(capturedPaths, openBracePos)
-              rem2 match {
-                case OperatorToken(CloseBrace, _) :: KeywordToken(UnboxKw, unboxPos) :: rem3 =>
-                  val (p, rem4) = parsePath(rem3, s"expected a path after $UnboxKw")
-                  (Unbox(captureSetTree, p, unboxPos), rem4)
-                case _ => reporter.fatal("malformed unbox term", rem2.headPos)
-              }
-            case OperatorToken(OpenParenth, _) :: rem1 =>
-              val (term, rem2) = parseTerm(rem1)
-              expectOperator(CloseParenth, rem2, "unclosed parenthesis")(term)
-            case _ => reporter.fatal("expected a term", tokens.headPos)
+      // non-empty record
+      case OperatorToken(OpenBrace, openBracePos) :: (rem1@(LowerWordToken(_, _) :: OperatorToken(Equal, _) :: _)) => {
+        val (fields, rem2) = parseCommaSeparatedFieldValuePairs(rem1)
+        rem2 match {
+          case OperatorToken(CloseBrace, _) :: rem3 =>
+            (RecordLiteral(fields, openBracePos), rem3)
+          case _ => reporter.fatal(s"unclosed record (missing '$CloseBrace", rem2.headPos)
         }
+      }
 
+      // unbox
+      case OperatorToken(OpenBrace, openBracePos) :: (rem1@(LowerWordToken(_, _) :: _)) => {
+        val (capturedPaths, rem2) = parseCommaSeparatedPaths(rem1)
+        val captureSetTree = NonRootCaptureSet(capturedPaths, openBracePos)
+        rem2 match {
+          case OperatorToken(CloseBrace, _) :: KeywordToken(UnboxKw, unboxPos) :: rem3 =>
+            val (p, rem4) = parsePath(rem3, s"expected a path after $UnboxKw")
+            (Unbox(captureSetTree, p, unboxPos), rem4)
+          case _ => reporter.fatal("malformed unbox term", rem2.headPos)
+        }
+      }
+
+      case OperatorToken(OpenBrace, _) :: rem =>
+        reporter.fatal("unrecognized term: neither a record, nor an unbox term, could be constructed", rem.headPos)
+
+      case OperatorToken(OpenParenth, pos) :: OperatorToken(CloseParenth, _) :: rem =>
+        (UnitLiteral(pos), rem)
+
+      case OperatorToken(OpenParenth, _) :: rem1 =>
+        val (term, rem2) = parseTerm(rem1)
+        expectOperator(CloseParenth, rem2, "missing closing parenthesis")(term)
+
+      case KeywordToken(BoxKw, pos) :: rem1 =>
+        val (p, rem2) = parsePath(rem1, s"expected a path after $BoxKw")
+        (Box(p, pos), rem2)
+
+      case KeywordToken(FnKw, fnPos) :: rem1 =>
+        val (abs, rem2) = parseFnFollow(rem1, true, parseTerm)
+        (abs.asInstanceOf[Abs], rem2)
+
+      case _ => reporter.fatal("expected a term", tokens.headPos)
     }
 
     def parseType(tokens: List[GradCCToken]): (TypeTree, Tokens) = {

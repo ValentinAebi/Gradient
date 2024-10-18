@@ -4,8 +4,8 @@ import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 
 def mkRecordField(fld: FieldTree): RecordField = fld match {
-  case NamedField(fieldName, position) => RegularField(fieldName)
-  case Reg(position) => RegionField
+  case NamedFieldTree(fieldName, position) => NamedField(fieldName)
+  case RegFieldTree(position) => RegionField
 }
 
 def mkType(typeTree: TypeTree): Type = Type(
@@ -34,5 +34,10 @@ def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTr
 
 def mkCapabilityPath(capPath: Path): CapabilityPath = capPath match {
   case Identifier(id, position) => CapVar(id)
-  case Select(root, select, position) => CapPath(mkCapabilityPath(root), select)
+  case Select(root, fld, position) => CapPath(mkCapabilityPath(root), mkField(fld))
+}
+
+def mkField(fld: FieldTree): RecordField = fld match {
+  case NamedFieldTree(fieldName, position) => NamedField(fieldName)
+  case RegFieldTree(position) => RegionField
 }

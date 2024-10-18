@@ -24,7 +24,6 @@ extension (v: UniqueVarId) {
   def isFreeIn(capturable: Capturable): Boolean = capturable match {
     case CapVar(variable) => v == variable
     case CapPath(lhs, select) => isFreeIn(lhs)
-    case RegPath(lhs) => isFreeIn(lhs)
     case RootCapability => false
   }
 

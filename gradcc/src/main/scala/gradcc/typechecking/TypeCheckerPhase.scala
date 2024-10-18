@@ -35,12 +35,12 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         ctx.varLookup(id)
       case Cap(position) =>
         throw AssertionError("unexpected type computation on the root capability")
-      case Select(owner, fieldId, position) =>
+      case Select(owner, field, position) =>
         computeTypes(owner).flatMap {
-          case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(RegularField(fieldId)) =>
-            fields.get(RegularField(fieldId))
+          case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(mkField(field)) =>
+            fields.get(mkField(field))
           case otherType => reportError(
-            s"no field named '$fieldId' found in owner type $otherType", position)
+            s"no '${mkField(field)}' field found in owner type $otherType", position)
         }
       case Box(boxed, position) =>
         computeTypes(boxed).map(BoxShape(_) ^ Set.empty)
@@ -131,9 +131,12 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         regionCapType.foreach { regionCapType =>
           mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
         }
-        val substFieldsTypesOpt = fields.map((fld, t) =>
-          mkRecordField(fld) ->
-            computeTypes(t).map(substitute(_)(using Map(mkCapabilityPath(regionCap) -> RegPath(CapVar(selfRefVar)))))
+        val substFieldsTypesOpt = fields.map(
+          (fld, t) =>
+            val regionCapPath = mkCapabilityPath(regionCap)
+            val regPath = CapPath(CapVar(selfRefVar), RegionField)
+            mkRecordField(fld) ->
+              computeTypes(t).map(substitute(_)(using Map(regionCapPath -> regPath)))
         )
         val allTypesComputed = substFieldsTypesOpt.forall(_._2.isDefined)
         if allTypesComputed then
