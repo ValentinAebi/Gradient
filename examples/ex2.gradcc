@@ -1,7 +1,4 @@
 
-// interestingly, if one removes the "^" after Reg, this is accepted
-
 fn (r: Reg^)(x: Ref Box (u: Unit) ->{} Unit)(y: (u: Unit) ->{r} Unit)
     let a = box y in
         x := a
-

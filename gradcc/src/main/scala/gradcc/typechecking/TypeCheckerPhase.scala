@@ -1,9 +1,11 @@
 package gradcc.typechecking
 
 import gradcc.*
+import gradcc.asts.UniquelyNamedTerms
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 import gradcc.lang.Keyword.SelfKw
+import gradcc.prettyprinting.TermsPrettyprinter
 import gradcc.typechecking.SubtypingRelation.*
 
 import scala.collection.mutable
@@ -11,6 +13,8 @@ import scala.collection.mutable
 
 final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typechecker") {
   private val varCreator = SyntheticVarCreator()
+
+  private val pp: Term => String = TermsPrettyprinter(UniquelyNamedTerms)
 
   override protected def runImpl(in: Term, reporter: Reporter): Map[Term, Type] = {
     val types: TermsTypes = mutable.Map.empty
@@ -41,6 +45,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
       case Box(boxed, position) =>
         computeTypes(boxed).map(BoxShape(_) ^ Set.empty)
       case abs@Abs(varIdent, varTypeTree, body, position) => {
+        varTypeTree.captureSet.foreach(checkCaptureSet)
         val varId = varIdent.id
         val varType = mkType(varTypeTree)
         computeTypes(body)(using ctx.withNewBinding(varId, Some(varType))).map { bodyType =>
@@ -64,6 +69,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
         }
       }
       case Unbox(captureSet, boxed, position) => {
+        checkCaptureSet(captureSet)
         val unboxCapSet = mkCaptureSet(captureSet)
         computeTypes(boxed).flatMap {
           case Type(BoxShape(boxed), _) if boxed.captureSet == unboxCapSet => Some(boxed)
@@ -181,6 +187,18 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     } else {
       ctx.reportError(s"type mismatch: expected $expectedShape, but was $actualShape", pos)
     }
+  }
+
+  private def checkCaptureSet(captureSetTree: CaptureSetTree)(using ctx: Ctx): Unit = captureSetTree match {
+    case NonRootCaptureSet(capturedVarsInOrder, position) =>
+      for (capVar <- capturedVarsInOrder){
+        val tpeOpt = computeTypes(capVar)
+        tpeOpt.filter(_.captureSet.isEmpty).foreach { tpe =>
+          ctx.reporter.warning(s"path ${pp(capVar)} of type $tpe has an empty capture set and is thus not a capability",
+            capVar.position)
+        }
+      }
+    case RootCaptureSet(position) => ()
   }
 
   private def typeDescr(optType: Option[Type]): String =
