@@ -99,7 +99,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           case Type(RefShape(referenced), captureSet) => Some(referenced ^ Set.empty)
           case tpe => reportError(s"illegal dereference: $tpe is not a reference", position)
         }
-      case Assign(ref, newVal, position) =>
+      case Assign(ref, newVal, position) => {
         (computeTypes(ref), computeTypes(newVal)) match {
           case (Some(Type(RefShape(referenced), _)), Some(valType)) => {
             if valType.captureSet.isEmpty
@@ -111,8 +111,10 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           }
           case (Some(nonRefType), Some(_)) =>
             reportError(s"expected a reference type as assignment target, found $nonRefType", position)
-          case _ => None
+          case _ => ()
         }
+        Some(UnitShape ^ Set.empty)
+      }
       case Ref(regionCap, initVal, position) =>
         (computeTypes(regionCap), computeTypes(initVal)) match {
           case (Some(Type(RegionShape, _)), Some(Type(initValShape, initValCaptureSet))) =>
@@ -191,7 +193,7 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
 
   private def checkCaptureSet(captureSetTree: CaptureSetTree)(using ctx: Ctx): Unit = captureSetTree match {
     case NonRootCaptureSet(capturedVarsInOrder, position) =>
-      for (capVar <- capturedVarsInOrder){
+      for (capVar <- capturedVarsInOrder) {
         val tpeOpt = computeTypes(capVar)
         tpeOpt.filter(_.captureSet.isEmpty).foreach { tpe =>
           ctx.reporter.warning(s"path ${pp(capVar)} of type $tpe has an empty capture set and is thus not a capability",
