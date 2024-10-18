@@ -1,0 +1,9 @@
+
+let f =
+    let g = fn (r: Reg^)(u: Unit) r in
+        let s = region in
+            g s
+in
+    let u = () in
+        f u
+

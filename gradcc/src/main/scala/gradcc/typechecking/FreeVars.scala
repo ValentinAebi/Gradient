@@ -7,7 +7,8 @@ extension (v: UniqueVarId) {
 
   def isFreeIn(tpe: Type): Boolean = {
     val Type(shape, captureSet) = tpe
-    isFreeIn(shape) || captureSet.exists(isFreeIn)
+    isFreeIn(shape)
+      || captureSet.exists(v.isFreeIn)
   }
 
   def isFreeIn(shape: ShapeType): Boolean = shape match {
@@ -21,7 +22,7 @@ extension (v: UniqueVarId) {
   }
 
   def isFreeIn(capturable: Capturable): Boolean = capturable match {
-    case CapVar(variable) => this == variable
+    case CapVar(variable) => v == variable
     case CapPath(lhs, select) => isFreeIn(lhs)
     case RegPath(lhs) => isFreeIn(lhs)
     case RootCapability => false
