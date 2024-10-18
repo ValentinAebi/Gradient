@@ -37,11 +37,12 @@ final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
       U.App(convertPath(callee), convertPath(arg), position)
     case A.Unbox(captureSet, boxed, position) =>
       U.Unbox(convertCaptureSetTree(captureSet), convertPath(boxed), position)
-    case A.Let(varId, value, body, position) =>
+    case A.Let(varId, value, typeAnnot, body, position) =>
       val newCtx = ctx.withNewId(varId.id)
       U.Let(
         convertIdentifier(varId)(using newCtx),
         convertTerm(value)(using ctx),
+        typeAnnot.map(convertType),
         convertTerm(body)(using newCtx),
         position
       )

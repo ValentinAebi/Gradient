@@ -7,8 +7,7 @@ extension (v: UniqueVarId) {
 
   def isFreeIn(tpe: Type): Boolean = {
     val Type(shape, captureSet) = tpe
-    isFreeIn(shape)
-      || captureSet.exists(v.isFreeIn)
+    isFreeIn(shape) || captureSet.exists(v.isFreeIn)
   }
 
   def isFreeIn(shape: ShapeType): Boolean = shape match {

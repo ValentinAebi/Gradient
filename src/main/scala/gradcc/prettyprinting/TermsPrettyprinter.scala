@@ -46,9 +46,13 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.Term): String = {
         pp(captureSet)
         add(" ").add(UnboxKw).add(" ")
         pp(boxed)
-      case p.Let(varId, value, body, position) =>
+      case p.Let(varId, value, typeAnnotOpt, body, position) =>
         add(LetKw).add(" ")
         pp(varId)
+        typeAnnotOpt.foreach { typeAnnot =>
+          add(": ")
+          pp(typeAnnot)
+        }
         add(" =").incIndent().newLine()
         pp(value)
         decIndent().newLine()

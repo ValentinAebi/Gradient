@@ -145,6 +145,17 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
         case _ => (None, tokens)
       }
 
+    def parseLetFollow(id: String, tpe: Option[TypeTree], tokens: Tokens, letPos: Position, idPos: Position): (Let, Tokens) = {
+      val (value, rem) = parseTerm(tokens)
+      rem match {
+        case KeywordToken(InKw, _) :: rem4 =>
+          val (body, rem5) = parseTerm(rem4)
+          (Let(Identifier(id, idPos), value, tpe, body, letPos), rem5)
+        case _ =>
+          reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", rem.headPos)
+      }
+    }
+
     def parseTerm(tokens: Tokens): (Term, Tokens) = tokens match {
 
       // cases starting with a path
@@ -161,19 +172,17 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
 
       // let-binding
       case KeywordToken(LetKw, letPos) :: rem1 => {
-        def reportMalformedLet(remTokens: Tokens) =
-          reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", remTokens.headPos)
-
         rem1 match {
           case LowerWordToken(id, idPos) :: OperatorToken(Equal, _) :: rem2 =>
-            val (value, rem3) = parseTerm(rem2)
+            parseLetFollow(id, None, rem2, letPos, idPos)
+          case LowerWordToken(id, idPos) :: OperatorToken(Colon, _) :: rem2 =>
+            val (tpe, rem3) = parseType(rem2)
             rem3 match {
-              case KeywordToken(InKw, _) :: rem4 =>
-                val (body, rem5) = parseTerm(rem4)
-                (Let(Identifier(id, idPos), value, body, letPos), rem5)
-              case _ => reportMalformedLet(rem3)
+              case OperatorToken(Equal, _) :: rem4 =>
+                parseLetFollow(id, Some(tpe), rem4, letPos, idPos)
             }
-          case _ => reportMalformedLet(rem1)
+          case _ =>
+            reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", rem1.headPos)
         }
       }
 

@@ -40,7 +40,7 @@ trait TermsProvider {
   
   case class App(callee: Path, arg: Path, override val position: Position) extends Term
   case class Unbox(captureSet: CaptureSetTree, boxed: Path, override val position: Position) extends Term
-  case class Let(varId: Identifier, value: Term, body: Term, override val position: Position) extends Term
+  case class Let(varId: Identifier, value: Term, typeAnnot: Option[TypeTree], body: Term, override val position: Position) extends Term
   case class Region(override val position: Position) extends Term
   case class Deref(ref: Path, override val position: Position) extends Term
   case class Assign(ref: Path, newVal: Path, override val position: Position) extends Term
@@ -52,7 +52,7 @@ trait TermsProvider {
   sealed trait TypeShapeTree extends Ast
   // TODO how to represent resources like Fs, Net, etc.?
   case class TopTypeTree(override val position: Position) extends TypeShapeTree
-  case class AbsTypeTree(varId: Identifier, varType: TypeTree, bodyType: TypeTree, override val position: Position) extends TypeShapeTree
+  case class AbsTypeTree(varId: Identifier, varType: TypeTree, resType: TypeTree, override val position: Position) extends TypeShapeTree
   case class BoxTypeTree(boxedType: TypeTree, override val position: Position) extends TypeShapeTree
   case class UnitTypeTree(override val position: Position) extends TypeShapeTree
   case class RefTypeTree(referencedType: TypeShapeTree, override val position: Position) extends TypeShapeTree

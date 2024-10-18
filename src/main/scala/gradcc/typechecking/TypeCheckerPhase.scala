@@ -79,9 +79,15 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
           case tpe => reportError(s"cannot unbox non-box type $tpe", position)
         }
       }
-      case Let(varId, value, body, position) => {
-        val valueType = computeTypes(value)
-        reporter.info(s"assign ${varId.id} : ${typeDescr(valueType)}", varId.position)
+      case Let(varId, value, typeAnnot, body, position) => {
+        val rawValueType = computeTypes(value)
+        for (rawValueType <- rawValueType; typeAnnot <- typeAnnot) {
+          mustBeAssignable(mkType(typeAnnot), rawValueType, typeAnnot.position, None)
+        }
+        if (typeAnnot.isEmpty) {
+          reporter.info(s"assign ${varId.id} : ${typeDescr(rawValueType)}", varId.position)
+        }
+        val valueType = typeAnnot.map(mkType).orElse(rawValueType)
         val bodyType = computeTypes(body)(using ctx.withNewBinding(varId.id, valueType))
         bodyType.foreach { bodyType =>
           if (varId.id.isFreeIn(bodyType)) {
@@ -151,28 +157,6 @@ final class TypeCheckerPhase extends SimplePhase[Term, Map[Term, Type]]("Typeche
     reporter.info(s"found ${t.description} : ${typeDescr(tpe)}", t.position)
     tpe
   })
-
-  private def cv(term: Term): Set[Capturable] = term match {
-    case p: Path => Set(mkCapabilityPath(p))
-    case Cap(position) => Set(RootCapability)
-    case Box(boxed, position) => Set.empty
-    case Abs(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
-    case RecordLiteral(fields, position) => fields.flatMap((_, p) => cv(p)).toSet
-    case UnitLiteral(position) => Set.empty
-    case App(callee, arg, position) => cv(callee) ++ cv(arg)
-    case Unbox(captureSet, boxed, position) => mkCaptureSet(captureSet) ++ cv(boxed)
-    case Let(varId, value, body, position) => {
-      val capturedByBody = cv(body)
-      if capturedByBody.exists(_.isRootedIn(varId.id))
-      then cv(value) ++ cv(body).filterNot(_.isRootedIn(varId.id))
-      else capturedByBody
-    }
-    case Region(position) => Set.empty
-    case Deref(ref, position) => cv(ref)
-    case Assign(ref, newVal, position) => cv(ref) ++ cv(newVal)
-    case Ref(regionCap, initVal, position) => cv(regionCap) ++ cv(initVal)
-    case Module(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
-  }
 
   private def mustBeAssignable(expectedType: Type, actualType: Type, pos: Position, ifAssignable: => Option[Type])
                               (using ctx: Ctx): Option[Type] = {
