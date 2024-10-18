@@ -1,0 +1,4 @@
+
+let r = region in
+let f: (u: Unit) ->{r} Reg^ = fn (u: Unit) region in
+    f
