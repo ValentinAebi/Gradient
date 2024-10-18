@@ -1,7 +1,7 @@
 
 organization := "ch.epfl.systemf"
 
-lazy val gradcc = project.in(file("gradcc"))
+lazy val gradient = project.in(file("."))
   .settings(
     scalaVersion := "3.5.1",
     version := "0.1.0-SNAPSHOT",

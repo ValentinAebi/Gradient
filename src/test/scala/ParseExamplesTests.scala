@@ -12,7 +12,7 @@ class ParseExamplesTests {
   def parseExamplesTest(): Unit = {
     val reporter = Reporter()
     val results =
-      Files.list(Path.of("../examples")).map(parseExampleTest(reporter))
+      Files.list(Path.of("./examples")).map(parseExampleTest(reporter))
         .toArray(new Array[PhaseResult[Term]](_))
     val isSuccess = !reporter.compilerMustStop() && results.forall(_.isSuccess)
     assertTrue("\n" + reporter.getStringReport, isSuccess)
