@@ -5,18 +5,11 @@ import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 import gradcc.{Position, Reporter}
 
-import scala.collection.mutable
-
-private[typechecking] type TermsTypes = mutable.Map[Term, Option[Type]]
 private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 
-private[typechecking] case class Ctx(store: Store, types: TermsTypes, reporter: Reporter) {
+private[typechecking] case class Ctx(store: Store, reporter: Reporter) {
 
   def withNewBinding(varId: UniqueVarId, varType: Option[Type]): Ctx = copy(store = store + (varId -> varType))
-
-  def saveType(term: Term, tpe: Option[Type]): Unit = {
-    types(term) = tpe
-  }
   
   def varLookup(varId: VarId): Option[Type] = store.apply(varId)
 

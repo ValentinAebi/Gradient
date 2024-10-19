@@ -7,6 +7,8 @@ object AmbiguouslyNamedTerms extends TermsProvider {
 
   override def str(varId: String): String = varId
 
+  override def getTerm[T <: AmbiguouslyNamedTerms.Term](r: T): T = r
+
   override def print[T <: Term](r: T, printT: T => Unit, printStr: String => Unit): Unit =
     printT(r)
 }

@@ -46,7 +46,7 @@ def cv(shapeTree: TypeShapeTree): Set[Capturable] = shapeTree match {
 
 def cv(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
   case NonRootCaptureSet(capturedVarsInOrder, position) =>
-    capturedVarsInOrder.map(mkCapabilityPath).toSet
+    capturedVarsInOrder.map(capV => mkCapabilityPath(capV)).toSet
   case RootCaptureSet(position) =>
     Set.empty
 }

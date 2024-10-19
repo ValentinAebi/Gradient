@@ -1,11 +1,10 @@
 package gradcc.asts
 
-object UniquelyNamedTerms extends TermsProvider {
-
-  override type VarId = UniqueVarId
+object UniquelyNamedTerms extends UidTermsProvider {
+  
   override type R[T <: Term] = T
 
-  override def str(varId: UniqueVarId): String = varId.toString
+  override def getTerm[T <: UniquelyNamedTerms.Term](r: T): T = r
 
   override def print[T <: Term](r: T, printT: T => Unit, printStr: String => Unit): Unit =
     printT(r)

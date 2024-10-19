@@ -10,6 +10,7 @@ trait TermsProvider {
   type R[+T <: Term]
 
   def str(varId: VarId): String
+  def getTerm[T <: Term](r: R[T]): T
   def print[T <: Term](r: R[T], printT: T => Unit, printStr: String => Unit): Unit
 
   sealed trait Ast {
@@ -41,7 +42,7 @@ trait TermsProvider {
   
   case class App(callee: R[Path], arg: R[Path], override val position: Position) extends Term
   case class Unbox(captureSet: CaptureSetTree, boxed: R[Path], override val position: Position) extends Term
-  case class Let(varId: R[Identifier], value: R[Term], typeAnnot: Option[TypeTree], body: R[Term], override val position: Position) extends Term
+  case class Let(varId: Identifier, value: R[Term], typeAnnot: Option[TypeTree], body: R[Term], override val position: Position) extends Term
   case class Region(override val position: Position) extends Term
   case class Deref(ref: R[Path], override val position: Position) extends Term
   case class Assign(ref: R[Path], newVal: R[Path], override val position: Position) extends Term

@@ -48,7 +48,7 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
         ppRecTerm(boxed)
       case p.Let(varId, value, typeAnnotOpt, body, position) =>
         add(LetKw).add(" ")
-        ppRecTerm(varId)
+        ppTerm(varId)
         typeAnnotOpt.foreach { typeAnnot =>
           add(": ")
           ppType(typeAnnot)
