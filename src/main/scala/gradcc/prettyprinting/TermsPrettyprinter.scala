@@ -22,7 +22,8 @@ def TermsPrettyprinter(
         add(CapKw)
       case p.Select(root, field, position) =>
         ppRecTerm(root)
-        add(".").add(field.toString)
+        add(".")
+        ppField(field)
       case p.Box(boxed, position) =>
         add(BoxKw).add(" ")
         ppRecTerm(boxed)
@@ -38,17 +39,7 @@ def TermsPrettyprinter(
         ppRecTerm(body)
         decIndent()
       case p.RecordLiteral(fields, position) =>
-        add("{")
-        newLineIfConsiderTypesElseSpace(+1)
-        val sep = if considerTypes then ",\n" else ", "
-        sepList(fields, sep) { (fld, v) =>
-          ppField(fld)
-          addIfConsiderTypes(typeAnnot(p.getType(v)))
-          add(" = ")
-          ppRecTerm(v)
-        }
-        newLineIfConsiderTypesElseSpace(-1)
-        add("}")
+        addFieldsList(fields)
       case p.UnitLiteral(position) =>
         add("()")
       case p.App(callee, arg, position) =>
@@ -90,17 +81,8 @@ def TermsPrettyprinter(
       case p.Module(regionCap, fields, position) =>
         add(ModKw).add("(")
         ppRecTerm(regionCap)
-        add(") {")
-        newLineIfConsiderTypesElseSpace(+1)
-        val sep = if considerTypes then ",\n" else ", "
-        sepList(fields, sep) { (fld, v) =>
-          ppField(fld)
-          addIfConsiderTypes(typeAnnot(p.getType(v)))
-          add(" = ")
-          ppRecTerm(v)
-        }
-        newLineIfConsiderTypesElseSpace(-1)
-        add("}")
+        add(") ")
+        addFieldsList(fields)
     }
   }
 
@@ -178,14 +160,27 @@ def TermsPrettyprinter(
     }
   }
 
-  def newLineIfConsiderTypesElseSpace(indentDiff: Int): Unit = {
-    require(indentDiff.abs == 1)
-    if (considerTypes) {
-      if indentDiff > 0 then incIndent() else decIndent()
-      newLine()
+  def addFieldsList(fields: Seq[(p.FieldTree, p.R[p.Path])]): Unit = {
+    val multiline = considerTypes && fields.size > 1
+    add("{")
+    if (multiline) {
+      incIndent().newLine()
     } else {
       add(" ")
     }
+    val sep = if multiline then ",\n" else ", "
+    sepList(fields, sep) { (fld, v) =>
+      ppField(fld)
+      addIfConsiderTypes(typeAnnot(p.getType(v)))
+      add(" = ")
+      ppRecTerm(v)
+    }
+    if (multiline) {
+      decIndent().newLine()
+    } else {
+      add(" ")
+    }
+    add("}")
   }
 
   def sepList[T](ls: Seq[T], sep: String)(f: T => Unit): Unit = {
