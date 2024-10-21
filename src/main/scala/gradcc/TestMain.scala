@@ -10,10 +10,7 @@ import gradcc.typechecking.TypeCheckerPhase
 import scala.io.Source
 import scala.util.Using
 
-@main def main(): Unit = {
-
-  val path = "examples/ex1.gradcc"
-
+@main def main(path: String): Unit = {
   val str = Using(Source.fromFile(path))(_.getLines().mkString("\n")).get
   val reporter = new Reporter()
   val pipeline =
