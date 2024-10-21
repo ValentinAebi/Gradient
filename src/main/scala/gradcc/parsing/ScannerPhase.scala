@@ -60,6 +60,8 @@ final class ScannerPhase extends SimplePhase[(Code, Filename), Seq[GradCCToken]]
 
   private val lazyMatchers = LazyList.from(matchers)
 
+  override val acceptsFaultyInput: Boolean = false
+
   override protected def runImpl(in: (Code, Filename), reporter: Reporter): Seq[GradCCToken] = {
     val (code, filename) = in
     val tokens = List.newBuilder[GradCCToken]

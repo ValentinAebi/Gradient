@@ -14,6 +14,8 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
 
   private val pp: TypedTerm[T.Term] => String = TermsPrettyprinter(T)
 
+  override val acceptsFaultyInput: Boolean = false
+
   override protected def runImpl(in: U.Term, reporter: Reporter): TypedTerm[T.Term] =
     typeTerm(in)(using Ctx(Map.empty, reporter))
 

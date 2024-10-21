@@ -27,10 +27,10 @@ import scala.util.Using
     res match
       case Success(value) =>
         s"\n$value"
+      case NonFatal(faultyValue) =>
+        s" !!! There were error(s) !!!\n\n$faultyValue"
       case Fatal(fatalErrorException) =>
         fatalErrorException.toString
-      case NonFatal =>
-        "Failure: non-fatal error(s) terminated the pipeline"
   )
   println()
   if (reporter.somethingReported) {

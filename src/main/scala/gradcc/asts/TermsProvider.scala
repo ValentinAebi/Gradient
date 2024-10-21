@@ -1,6 +1,7 @@
 package gradcc.asts
 
 import gradcc.Position
+import gradcc.lang.Type
 
 trait TermsProvider {
 
@@ -11,7 +12,9 @@ trait TermsProvider {
 
   def str(varId: VarId): String
   def getTerm[T <: Term](r: R[T]): T
-  def print[T <: Term](r: R[T], printT: T => Unit, printStr: String => Unit): Unit
+  def getType[T <: Term](r: R[T]): Option[Type]
+  
+  val hasTypes: Boolean
 
   sealed trait Ast {
     val position: Position

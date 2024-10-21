@@ -14,7 +14,7 @@ class ParseExamplesTests {
     val results =
       Files.list(Path.of("./examples")).map(parseExampleTest(reporter))
         .toArray(new Array[PhaseResult[Term]](_))
-    val isSuccess = !reporter.compilerMustStop() && results.forall(_.isSuccess)
+    val isSuccess = !reporter.errorFlagIsRaised && results.forall(_.isSuccess)
     assertTrue("\n" + reporter.getStringReport, isSuccess)
   }
 

@@ -12,12 +12,17 @@ final class Reporter {
   private val warnings: ListBuffer[Entry] = ListBuffer.empty
   private val infos: ListBuffer[Entry] = ListBuffer.empty
 
-  private var stopFlag: Boolean = false
+  private var errorFlag: Boolean = false
 
-  def somethingReported: Boolean = stopFlag || warnings.nonEmpty || infos.nonEmpty
+  def errorFlagIsRaised: Boolean = errorFlag
+
+  def somethingReported: Boolean = errorFlagIsRaised || warnings.nonEmpty || infos.nonEmpty
+
+  def impossibleToRunPhaseDueToErrors(phase: Phase[?, ?]): Fatal =
+    Fatal(FatalErrorException(Entry(s"cannot run phase ${phase.phaseName} due to previous errors", None)))
 
   def fatal(msg: String, pos: Option[Position]): Nothing = {
-    stopFlag = true
+    errorFlag = true
     val entry = Entry(msg, pos)
     errors.addOne(entry)
     throw FatalErrorException(entry)
@@ -28,7 +33,7 @@ final class Reporter {
   }
 
   def error(msg: String, pos: Option[Position]): Unit = {
-    stopFlag = true
+    errorFlag = true
     errors.addOne(Entry(msg, pos))
   }
 
@@ -51,8 +56,6 @@ final class Reporter {
   def info(msg: String, pos: Position): Unit = {
     info(msg, Some(pos))
   }
-
-  def compilerMustStop(): Boolean = stopFlag
 
   def dump(ps: PrintStream): Unit = {
     dumpList(ps, errors, "error(s)")
@@ -79,7 +82,8 @@ final class Reporter {
 object Reporter {
 
   private[Reporter] final case class Entry(msg: String, pos: Option[Position]) {
-    override def toString: String = s"[${pos.getOrElse("??")}] $msg"
+    override def toString: String =
+      s"${pos.map(pos => s"[$pos] ").getOrElse("")}$msg\n" + pos.map(_.lineDisplay).getOrElse("")
   }
 
   final case class FatalErrorException private[Reporter](private val entry: Entry) extends Exception {
@@ -87,6 +91,6 @@ object Reporter {
 
     override def toString: String = entry.toString
   }
-  
+
 }
 

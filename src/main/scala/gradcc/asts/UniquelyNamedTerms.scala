@@ -1,4 +1,5 @@
 package gradcc.asts
+import gradcc.lang.Type
 
 object UniquelyNamedTerms extends UidTermsProvider {
   
@@ -6,8 +7,10 @@ object UniquelyNamedTerms extends UidTermsProvider {
 
   override def getTerm[T <: UniquelyNamedTerms.Term](r: T): T = r
 
-  override def print[T <: Term](r: T, printT: T => Unit, printStr: String => Unit): Unit =
-    printT(r)
+  override def getType[T <: UniquelyNamedTerms.Term](r: T): Option[Type] = None
+
+  override val hasTypes: Boolean = false
+  
 }
 
 final case class UniqueVarId(varName: String, idx: Int){

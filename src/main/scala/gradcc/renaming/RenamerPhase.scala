@@ -8,6 +8,8 @@ import scala.collection.mutable.Map as MutMap
 final class RenamerPhase extends SimplePhase[A.Term, U.Term]("Renamer") {
   private val unknownId: UniqueVarId = UniqueVarId("<unknown>", -1)
 
+  override val acceptsFaultyInput: Boolean = false
+
   override protected def runImpl(in: A.Term, reporter: Reporter): U.Term =
     convertTerm(in)(using Ctx(Map.empty, MutMap.empty, reporter))
 

@@ -23,7 +23,7 @@ final class IndentedStringBuilder(indent: String = "  ") {
 
   def add(s: String): IndentedStringBuilder = {
     var isFirstLine = true
-    s.lines().forEach { line =>
+    allLines(s).foreach { line =>
       if (!isFirstLine){
         newLine()
       }
@@ -45,4 +45,13 @@ final class IndentedStringBuilder(indent: String = "  ") {
 
   override def toString: String = sb.toString()
 
+}
+
+private def allLines(s: String): Seq[String] = {
+  val lines = Seq.newBuilder[String]
+  s.lines().forEach(lines.addOne)
+  if (s.endsWith("\n") || s.endsWith("\r")){
+    lines.addOne("")
+  }
+  lines.result()
 }

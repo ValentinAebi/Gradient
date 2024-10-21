@@ -1,5 +1,7 @@
 package gradcc.asts
 
+import gradcc.lang.Type
+
 object AmbiguouslyNamedTerms extends TermsProvider {
 
   override type VarId = String
@@ -9,6 +11,7 @@ object AmbiguouslyNamedTerms extends TermsProvider {
 
   override def getTerm[T <: AmbiguouslyNamedTerms.Term](r: T): T = r
 
-  override def print[T <: Term](r: T, printT: T => Unit, printStr: String => Unit): Unit =
-    printT(r)
+  override def getType[T <: AmbiguouslyNamedTerms.Term](r: T): Option[Type] = None
+
+  override val hasTypes: Boolean = false
 }

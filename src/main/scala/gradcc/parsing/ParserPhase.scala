@@ -13,6 +13,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], Term]("Parser") {
 
   private type Tokens = List[GradCCToken]
 
+  override val acceptsFaultyInput: Boolean = false
+
   override protected def runImpl(in: Seq[GradCCToken], reporter: Reporter): Term = {
 
     def startsWithLowerWord(tokens: Tokens): Boolean = tokens match {

@@ -8,14 +8,9 @@ object TypedTerms extends UidTermsProvider {
 
   override def getTerm[T <: TypedTerms.Term](r: TypedTerm[T]): T = r.term
 
-  override def print[T <: TypedTerms.Term](r: TypedTerm[T], printT: T => Unit, printStr: String => Unit): Unit = {
-    val TypedTerm(term, tpe) = r
-    printT(term)
-    printStr(s"$cyanColorCode:${tpe.getOrElse("??")}$resetColorCode")
-  }
+  override def getType[T <: TypedTerms.Term](r: TypedTerm[T]): Option[Type] = r.tpe
 
-  private val cyanColorCode: String = "\u001B[36m"
-  private val resetColorCode: String = "\u001B[0m"
+  override val hasTypes: Boolean = true
 
 }
 

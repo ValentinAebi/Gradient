@@ -2,14 +2,19 @@ package gradcc.prettyprinting
 
 import gradcc.asts.TermsProvider
 import gradcc.lang.Keyword.*
-import gradcc.lang.ShapeType
+import gradcc.lang.Type
 
 
-def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
+def TermsPrettyprinter(
+                        p: TermsProvider,
+                        forceIgnoreTypes: Boolean = false
+                      )(term: p.R[p.Term]): String = {
+  
+  val considerTypes = p.hasTypes && !forceIgnoreTypes
   val isb = IndentedStringBuilder()
   import isb.*
 
-  def ppTerm(term: p.Term): Unit = {
+  def ppTerm(term: p.Term, optType: Option[Type] = None): Unit = {
     term match {
       case id: p.Identifier =>
         ppId(id)
@@ -25,23 +30,33 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
         add(FnKw).add(" (").add(p.str(varId.id))
         add(": ")
         ppType(tpe)
-        add(")").incIndent().newLine()
+        add(")")
+        p.getType(body).foreach { bodyType =>
+          addIfConsiderTypes(s" -> $bodyType")
+        }
+        incIndent().newLine()
         ppRecTerm(body)
         decIndent()
       case p.RecordLiteral(fields, position) =>
-        add("{ ")
-        sepList(fields, ", ") { (fld, v) =>
+        add("{")
+        newLineIfConsiderTypesElseSpace(+1)
+        val sep = if considerTypes then ",\n" else ", "
+        sepList(fields, sep) { (fld, v) =>
           ppField(fld)
+          addIfConsiderTypes(typeAnnot(p.getType(v)))
           add(" = ")
           ppRecTerm(v)
         }
-        add(" }")
+        newLineIfConsiderTypesElseSpace(-1)
+        add("}")
       case p.UnitLiteral(position) =>
         add("()")
       case p.App(callee, arg, position) =>
+        addIfConsiderTypes("(")
         ppRecTerm(callee)
         add(" ")
         ppRecTerm(arg)
+        addIfConsiderTypes(")" + typeAnnot(optType))
       case p.Unbox(captureSet, boxed, position) =>
         ppCapt(captureSet)
         add(" ").add(UnboxKw).add(" ")
@@ -75,27 +90,24 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
       case p.Module(regionCap, fields, position) =>
         add(ModKw).add("(")
         ppRecTerm(regionCap)
-        add(") { ")
-        sepList(fields, ", ") { (fld, v) =>
+        add(") {")
+        newLineIfConsiderTypesElseSpace(+1)
+        val sep = if considerTypes then ",\n" else ", "
+        sepList(fields, sep) { (fld, v) =>
           ppField(fld)
+          addIfConsiderTypes(typeAnnot(p.getType(v)))
           add(" = ")
           ppRecTerm(v)
         }
-        add(" }")
-      case p.NamedFieldTree(fieldName, position) =>
-        add(fieldName)
-      case p.RegFieldTree(position) =>
-        add(RegKw)
-      case p.TypeTree(shape, captureSet, position) =>
-        ppShape(shape)
-        captureSet.foreach { cs =>
-          add("^")
-          ppCapt(cs)
-        }
+        newLineIfConsiderTypesElseSpace(-1)
+        add("}")
     }
   }
 
-  def ppRecTerm(r: p.R[p.Term]): Unit = p.print(r, ppTerm, add)
+  def ppRecTerm(r: p.R[p.Term]): Unit = {
+    val term = p.getTerm(r)
+    ppTerm(term, p.getType(r))
+  }
 
   def ppType(tpe: p.TypeTree): Unit = {
     val p.TypeTree(shape, capt, position) = tpe
@@ -155,12 +167,33 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
 
   def ppId(id: p.Identifier): Unit = add(p.str(id.id))
 
+  def typeAnnot(tpe: Option[Type]): String = {
+    val typeDescr = tpe.map(_.toString).getOrElse("??")
+    s" : $typeDescr"
+  }
+
+  inline def addIfConsiderTypes(inline s: String): Unit = {
+    if (considerTypes) {
+      add(yellow(s))
+    }
+  }
+
+  def newLineIfConsiderTypesElseSpace(indentDiff: Int): Unit = {
+    require(indentDiff.abs == 1)
+    if (considerTypes) {
+      if indentDiff > 0 then incIndent() else decIndent()
+      newLine()
+    } else {
+      add(" ")
+    }
+  }
+
   def sepList[T](ls: Seq[T], sep: String)(f: T => Unit): Unit = {
     val iter = ls.iterator
     while (iter.hasNext) {
       f(iter.next())
       if (iter.hasNext) {
-        add(", ")
+        add(sep)
       }
     }
   }
@@ -168,3 +201,10 @@ def TermsPrettyprinter(p: TermsProvider)(term: p.R[p.Term]): String = {
   ppRecTerm(term)
   isb.toString
 }
+
+private val yellowColorCode: String = "\u001B[33m"
+private val cyanColorCode: String = "\u001B[36m"
+private val resetColorCode: String = "\u001B[0m"
+
+private def yellow(str: String): String = yellowColorCode + str + resetColorCode
+private def cyan(str: String): String = cyanColorCode + str + resetColorCode
