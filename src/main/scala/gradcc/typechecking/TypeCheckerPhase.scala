@@ -166,12 +166,14 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val typedLhs = typePath(lhs)
       val fld = U.mkField(field)
       T.SelectTree(typedLhs, convertField(field), position).withType(
-        typedLhs.tpe.flatMap {
-          case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(fld) =>
-            Some(fields.apply(fld))
-          case otherType =>
-            ctx.reportError(s"no '$fld' field found in owner type $otherType", position)
-        }
+        typedLhs.tpe
+          .map(unpackIfRecursive(_, U.mkPath(lhs)))
+          .flatMap {
+            case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(fld) =>
+              Some(fields.apply(fld))
+            case otherType =>
+              ctx.reportError(s"no '$fld' field found in owner type $otherType", position)
+          }
       )
   }
 
@@ -251,6 +253,20 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   extension [A <: T.TermTree](term: A) {
     private def withType(tpe: Option[Type]): TypedTerm[A] = TypedTerm(term, tpe)
     private def withType(tpe: Type): TypedTerm[A] = term.withType(Some(tpe))
+  }
+
+  private def unpackIfRecursive(tpe: Type, selfRef: Path)(using ctx: Ctx): Type = tpe match {
+    case Type(RecordShape(Some(selfVarId), fields), capSet) =>
+      val substMap = Map[Capturable, Path](VarPath(selfVarId) -> selfRef)
+      Type(
+        RecordShape(None, fields.map(
+          (fld, tpe) => (fld, substitute(tpe)(using substMap)))
+        ),
+        capSet.map(
+          substitute(_)(using substMap)
+        )
+      )
+    case _ => tpe
   }
 
   private def typeDescr(optType: Option[Type]): String =
