@@ -81,9 +81,6 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       for (rawValueType <- typedValue.tpe; typeAnnot <- typeAnnot) {
         mustBeAssignable(U.mkType(typeAnnot), rawValueType, typeAnnot.position, None)
       }
-      if (typeAnnot.isEmpty) {
-        ctx.reporter.info(s"assign ${varId.id} : ${typeDescr(typedValue.tpe)}", varId.position)
-      }
       val valueType = typeAnnot.map(U.mkType).orElse(typedValue.tpe)
       val typedBody = typeTerm(body)(using ctx.withNewBinding(varId.id, valueType))
       typedBody.tpe.foreach { bodyType =>
