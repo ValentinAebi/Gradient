@@ -1,5 +1,5 @@
-import gradcc.Reporter
-import gradcc.parsing.ScannerPhase
+import gradcc.phases.parsing.ScannerPhase
+import gradcc.reporting.Reporter
 import org.junit.Assert.{assertEquals, assertFalse}
 import org.junit.Test
 

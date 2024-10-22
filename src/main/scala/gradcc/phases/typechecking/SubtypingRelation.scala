@@ -1,4 +1,4 @@
-package gradcc.typechecking
+package gradcc.phases.typechecking
 
 import gradcc.lang.*
 

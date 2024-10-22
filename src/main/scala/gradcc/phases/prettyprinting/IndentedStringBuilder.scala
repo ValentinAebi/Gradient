@@ -1,4 +1,4 @@
-package gradcc.prettyprinting
+package gradcc.phases.prettyprinting
 
 import gradcc.lang.{Keyword, Operator}
 

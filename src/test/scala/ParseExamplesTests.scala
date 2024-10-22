@@ -1,6 +1,7 @@
 import gradcc.asts.AmbiguouslyNamedTerms.TermTree
-import gradcc.parsing.{ParserPhase, ScannerPhase}
-import gradcc.{PhaseResult, Reporter}
+import gradcc.phases.PhaseResult
+import gradcc.phases.parsing.{ParserPhase, ScannerPhase}
+import gradcc.reporting.Reporter
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

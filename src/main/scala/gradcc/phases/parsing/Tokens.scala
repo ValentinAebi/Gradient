@@ -1,7 +1,7 @@
-package gradcc.parsing
+package gradcc.phases.parsing
 
-import gradcc.Position
 import gradcc.lang.{Keyword, Operator}
+import gradcc.reporting.Position
 
 sealed trait GradCCToken {
   def str: String

@@ -1,8 +1,8 @@
-package gradcc.typechecking
+package gradcc.phases.typechecking
 
 import gradcc.asts.UniqueVarId
 import gradcc.lang.Keyword
-import gradcc.parsing.ScannerPhase
+import gradcc.phases.parsing.ScannerPhase
 
 import scala.collection.mutable
 

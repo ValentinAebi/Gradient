@@ -1,7 +1,7 @@
 package gradcc.asts
 
-import gradcc.Position
 import gradcc.lang.Type
+import gradcc.reporting.Position
 
 trait TermsProvider {
 

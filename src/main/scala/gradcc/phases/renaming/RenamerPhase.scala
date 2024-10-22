@@ -1,7 +1,8 @@
-package gradcc.renaming
+package gradcc.phases.renaming
 
 import gradcc.asts.{UniqueVarId, AmbiguouslyNamedTerms as A, UniquelyNamedTerms as U}
-import gradcc.{Position, Reporter, SimplePhase}
+import gradcc.phases.SimplePhase
+import gradcc.reporting.{Position, Reporter}
 
 import scala.collection.mutable.Map as MutMap
 

@@ -1,4 +1,4 @@
-package gradcc.parsing
+package gradcc.phases.parsing
 
 import gradcc.*
 import gradcc.asts.AmbiguouslyNamedTerms
@@ -6,6 +6,8 @@ import gradcc.asts.AmbiguouslyNamedTerms.*
 import gradcc.lang.Keyword.*
 import gradcc.lang.Operator.*
 import gradcc.lang.{Keyword, NamedField, Operator, RegionField}
+import gradcc.phases.SimplePhase
+import gradcc.reporting.{Position, Reporter}
 
 import scala.annotation.tailrec
 

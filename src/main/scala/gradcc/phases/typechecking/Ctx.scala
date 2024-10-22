@@ -1,9 +1,9 @@
-package gradcc.typechecking
+package gradcc.phases.typechecking
 
 import gradcc.asts.UniqueVarId
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
-import gradcc.{Position, Reporter}
+import gradcc.reporting.{Position, Reporter}
 
 private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 

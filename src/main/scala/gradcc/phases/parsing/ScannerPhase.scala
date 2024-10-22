@@ -1,8 +1,9 @@
-package gradcc.parsing
+package gradcc.phases.parsing
 
 import gradcc.lang.{Conventions, Keyword, Operator}
-import gradcc.parsing.ScannerPhase.{lowerWordRegex, upperWordRegex}
-import gradcc.{Position, Reporter, SimplePhase, parsing}
+import gradcc.phases.SimplePhase
+import gradcc.phases.parsing.ScannerPhase.{lowerWordRegex, upperWordRegex}
+import gradcc.reporting.{Position, Reporter}
 
 import scala.util.matching.Regex
 

@@ -1,10 +1,12 @@
-package gradcc.typechecking
+package gradcc.phases.typechecking
 
 import gradcc.*
 import gradcc.asts.{TypedTerm, TypedTerms as T, UniquelyNamedTerms as U}
 import gradcc.lang.*
-import gradcc.prettyprinting.TermsPrettyprinter
-import gradcc.typechecking.SubtypingRelation.*
+import gradcc.phases.prettyprinting.TermsPrettyprinter
+import gradcc.reporting.{Position, Reporter}
+import SubtypingRelation.*
+import gradcc.phases.SimplePhase
 
 // TODO pack and unpack
 // TODO double-check every typing rule

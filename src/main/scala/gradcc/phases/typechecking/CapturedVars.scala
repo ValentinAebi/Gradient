@@ -1,4 +1,4 @@
-package gradcc.typechecking
+package gradcc.phases.typechecking
 
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.{Capturable, RootCapability}

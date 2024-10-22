@@ -1,5 +1,4 @@
-package gradcc
-
+package gradcc.reporting
 
 case class Position(file: String, line: Int, column: Int, lineContents: String) {
 

@@ -2,10 +2,12 @@ package gradcc
 
 import gradcc.*
 import gradcc.asts.TypedTerms
-import gradcc.parsing.{ParserPhase, ScannerPhase}
-import gradcc.prettyprinting.PrettyprinterPhase
-import gradcc.renaming.RenamerPhase
-import gradcc.typechecking.TypeCheckerPhase
+import gradcc.phases.{Fatal, NonFatal, Success}
+import gradcc.phases.parsing.{ParserPhase, ScannerPhase}
+import gradcc.phases.prettyprinting.PrettyprinterPhase
+import gradcc.phases.renaming.RenamerPhase
+import gradcc.phases.typechecking.TypeCheckerPhase
+import gradcc.reporting.Reporter
 
 import scala.io.Source
 import scala.util.Using

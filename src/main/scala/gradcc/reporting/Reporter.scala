@@ -1,6 +1,7 @@
-package gradcc
+package gradcc.reporting
 
-import gradcc.Reporter.{Entry, FatalErrorException}
+import Reporter.{Entry, FatalErrorException}
+import gradcc.phases.{Fatal, Phase}
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.collection.mutable.ListBuffer
