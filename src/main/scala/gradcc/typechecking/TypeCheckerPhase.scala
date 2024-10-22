@@ -55,7 +55,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         case (_, None) => None
         case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
           mustBeAssignable(varType, argType, arg.position, {
-            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkCapabilityPath(arg))))
+            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkPath(arg))))
           })
         case (Some(callerType), _) =>
           ctx.reportError(s"$callerType is not callable", position)
@@ -130,7 +130,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val tpeOpt = (typedRegionCap.tpe, typedInitVal.tpe) match {
         case (Some(Type(RegionShape, _)), Some(Type(initValShape, initValCaptureSet))) =>
           if initValCaptureSet.isEmpty
-          then Some(RefShape(initValShape) ^ Set(U.mkCapabilityPath(regionCap)))
+          then Some(RefShape(initValShape) ^ Set(U.mkPath(regionCap)))
           else ctx.reportError("reference value must have an empty capture set", position)
         case (Some(nonRegionType), _) =>
           ctx.reportError(s"expected a region, found $nonRegionType", position)
@@ -143,7 +143,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
       }
       val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
-      val regionCapPath = U.mkCapabilityPath(regionCap)
+      val regionCapPath = U.mkPath(regionCap)
       val substFields = fields.map(
         (fld, p) =>
           val regPath = SelectPath(VarPath(selfRefVar), RegionField)
