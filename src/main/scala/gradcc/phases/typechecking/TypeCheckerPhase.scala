@@ -9,7 +9,7 @@ import SubtypingRelation.*
 import gradcc.phases.SimplePhase
 
 // TODO pack and unpack
-// TODO double-check every typing rule
+// TODO double-check every typing/subtyping/subcapturing rule
 
 final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTree]]("Typechecker") {
   private val varCreator = SyntheticVarCreator()
@@ -252,20 +252,6 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   extension [A <: T.TermTree](term: A) {
     private def withType(tpe: Option[Type]): TypedTerm[A] = TypedTerm(term, tpe)
     private def withType(tpe: Type): TypedTerm[A] = term.withType(Some(tpe))
-  }
-
-  private def unpackIfRecursive(tpe: Type, selfRef: Path)(using ctx: Ctx): Type = tpe match {
-    case Type(RecordShape(Some(selfVarId), fields), capSet) =>
-      val substMap = Map[Capturable, Path](VarPath(selfVarId) -> selfRef)
-      Type(
-        RecordShape(None, fields.map(
-          (fld, tpe) => (fld, substitute(tpe)(using substMap)))
-        ),
-        capSet.map(
-          substitute(_)(using substMap)
-        )
-      )
-    case _ => tpe
   }
 
   private def typeDescr(optType: Option[Type]): String =
