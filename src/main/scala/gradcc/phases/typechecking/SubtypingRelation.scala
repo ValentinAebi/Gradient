@@ -38,7 +38,7 @@ object SubtypingRelation {
     // Boxed
     case (BoxShape(bl), BoxShape(br)) => bl.subtypeOf(br)
     // Rec
-    case (RecordShape(lSelfRef, lFields), RecordShape(rSelfRef, rFields)) =>
+    case (RecordShape(None, lFields), RecordShape(None, rFields)) =>
       lFields.forall((lfn, lft) => rFields.get(lfn).exists(lft.subtypeOf))
     case _ => false
   }
