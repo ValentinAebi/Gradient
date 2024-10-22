@@ -1,0 +1,9 @@
+
+let m =
+    let r = region in
+    let f = fn (u: Unit) r in
+    mod(r){ g = f }
+in
+    let h = m.g in
+    let u = () in h u
+
