@@ -9,45 +9,45 @@ import gradcc.typechecking.SubtypingRelation.*
 // TODO pack and unpack
 // TODO double-check every typing rule
 
-final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typechecker") {
+final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTree]]("Typechecker") {
   private val varCreator = SyntheticVarCreator()
 
-  private val pp: TypedTerm[T.Term] => String = TermsPrettyprinter(T)
+  private val pp: TypedTerm[T.TermTree] => String = TermsPrettyprinter(T)
 
   override val acceptsFaultyInput: Boolean = false
 
-  override protected def runImpl(in: U.Term, reporter: Reporter): TypedTerm[T.Term] =
+  override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTerm[T.TermTree] =
     typeTerm(in)(using Ctx(Map.empty, reporter))
 
-  private def typeTerm(t: U.Term)(using ctx: Ctx): TypedTerm[T.Term] = t match {
-    case p: U.Path => typePath(p)
-    case U.Cap(position) =>
+  private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTerm[T.TermTree] = t match {
+    case p: U.PathTree => typePath(p)
+    case U.CapTree(position) =>
       throw AssertionError("unexpected type computation on the root capability")
-    case abs@U.Abs(varIdent, varTypeTree, body, position) => {
+    case abs@U.AbsTree(varIdent, varTypeTree, body, position) => {
       val varType = U.mkType(varTypeTree)
       val varId = varIdent.id
       val typedBody = typeTerm(body)(using ctx.withNewBinding(varId, Some(varType)))
-      T.Abs(convertIdent(varIdent), typeTypeTree(varTypeTree), typedBody, position).withType(
+      T.AbsTree(convertIdent(varIdent), typeTypeTree(varTypeTree), typedBody, position).withType(
         typedBody.tpe.map(AbsShape(varId, varType, _) ^ cv(abs))
       )
     }
-    case U.Box(boxed, position) =>
+    case U.BoxTree(boxed, position) =>
       val typedBoxed = typePath(boxed)
-      T.Box(typedBoxed, position).withType(
+      T.BoxTree(typedBoxed, position).withType(
         typedBoxed.tpe.map(BoxShape(_) ^ Set.empty)
       )
-    case recordLit@U.RecordLiteral(fields, position) =>
+    case recordLit@U.RecordLiteralTree(fields, position) =>
       val typedFields = convertFields(fields, typePath)
-      T.RecordLiteral(typedFields, position).withType {
+      T.RecordLiteralTree(typedFields, position).withType {
         collectTypes(typedFields).map { fldTypes =>
           val fieldsToType = fields.map((fld, _) => U.mkField(fld)).zip(fldTypes).toMap
           val recordCapSet = fldTypes.flatMap(_.captureSet).toSet
           RecordShape(None, fieldsToType) ^ recordCapSet
         }
       }
-    case U.UnitLiteral(position) =>
-      T.UnitLiteral(position).withType(UnitShape ^ Set.empty)
-    case U.App(callee, arg, position) => {
+    case U.UnitLiteralTree(position) =>
+      T.UnitLiteralTree(position).withType(UnitShape ^ Set.empty)
+    case U.AppTree(callee, arg, position) => {
       val typedCallee = typePath(callee)
       val typedArg = typePath(arg)
       val tpeOpt = (typedCallee.tpe, typedArg.tpe) match {
@@ -55,18 +55,18 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
         case (_, None) => None
         case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
           mustBeAssignable(varType, argType, arg.position, {
-            Some(substitute(resType)(using Map(CapVar(varId) -> U.mkCapabilityPath(arg))))
+            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkCapabilityPath(arg))))
           })
         case (Some(callerType), _) =>
           ctx.reportError(s"$callerType is not callable", position)
       }
-      T.App(typedCallee, typedArg, position).withType(tpeOpt)
+      T.AppTree(typedCallee, typedArg, position).withType(tpeOpt)
     }
-    case U.Unbox(captureSet, boxed, position) => {
+    case U.UnboxTree(captureSet, boxed, position) => {
       val typedCapSet = typeCaptureSet(captureSet)
       val typedBoxed = typePath(boxed)
       val unboxCapSet = T.mkCaptureSet(typedCapSet)
-      T.Unbox(typedCapSet, typedBoxed, position).withType(
+      T.UnboxTree(typedCapSet, typedBoxed, position).withType(
         typedBoxed.tpe.flatMap {
           case Type(BoxShape(boxed), _) if boxed.captureSet == unboxCapSet => Some(boxed)
           case Type(BoxShape(boxed), _) =>
@@ -76,7 +76,7 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
         }
       )
     }
-    case U.Let(varId, value, typeAnnot, body, position) => {
+    case U.LetTree(varId, value, typeAnnot, body, position) => {
       val typedValue = typeTerm(value)
       for (rawValueType <- typedValue.tpe; typeAnnot <- typeAnnot) {
         mustBeAssignable(U.mkType(typeAnnot), rawValueType, typeAnnot.position, None)
@@ -94,19 +94,19 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
           )
         }
       }
-      T.Let(convertIdent(varId), typedValue, typeAnnot.map(typeTypeTree), typedBody, position).withType(typedBody.tpe)
+      T.LetTree(convertIdent(varId), typedValue, typeAnnot.map(typeTypeTree), typedBody, position).withType(typedBody.tpe)
     }
-    case U.Region(position) =>
-      T.Region(position).withType(RegionShape ^ Set(RootCapability))
-    case U.Deref(ref, position) =>
+    case U.RegionTree(position) =>
+      T.RegionTree(position).withType(RegionShape ^ Set(RootCapability))
+    case U.DerefTree(ref, position) =>
       val typedRef = typePath(ref)
-      T.Deref(typedRef, position).withType(
+      T.DerefTree(typedRef, position).withType(
         typedRef.tpe.flatMap {
           case Type(RefShape(referenced), captureSet) => Some(referenced ^ Set.empty)
           case tpe => ctx.reportError(s"illegal dereference: $tpe is not a reference", position)
         }
       )
-    case U.Assign(ref, newVal, position) => {
+    case U.AssignTree(ref, newVal, position) => {
       val typedRef = typePath(ref)
       val typedNewVal = typePath(newVal)
       (typedRef.tpe, typedNewVal.tpe) match {
@@ -122,9 +122,9 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
           ctx.reportError(s"expected a reference type as assignment target, found $nonRefType", position)
         case _ => ()
       }
-      T.Assign(typedRef, typedNewVal, position).withType(UnitShape ^ Set.empty)
+      T.AssignTree(typedRef, typedNewVal, position).withType(UnitShape ^ Set.empty)
     }
-    case U.Ref(regionCap, initVal, position) =>
+    case U.RefTree(regionCap, initVal, position) =>
       val typedRegionCap = typePath(regionCap)
       val typedInitVal = typePath(initVal)
       val tpeOpt = (typedRegionCap.tpe, typedInitVal.tpe) match {
@@ -136,8 +136,8 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
           ctx.reportError(s"expected a region, found $nonRegionType", position)
         case _ => None
       }
-      T.Ref(typedRegionCap, typedInitVal, position).withType(tpeOpt)
-    case U.Module(regionCap, fields, position) => {
+      T.RefTree(typedRegionCap, typedInitVal, position).withType(tpeOpt)
+    case U.ModuleTree(regionCap, fields, position) => {
       val typedRegionCap = typePath(regionCap)
       typedRegionCap.tpe.foreach { regionCapType =>
         mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
@@ -146,7 +146,7 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
       val regionCapPath = U.mkCapabilityPath(regionCap)
       val substFields = fields.map(
         (fld, p) =>
-          val regPath = CapPath(CapVar(selfRefVar), RegionField)
+          val regPath = SelectPath(VarPath(selfRefVar), RegionField)
           val TypedTerm(convP, pType) = typePath(p)
           convertField(fld) -> TypedTerm(convP, pType.map(substitute(_)(using Map(regionCapPath -> regPath))))
       )
@@ -154,18 +154,18 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
         val fieldsToTypes = substFields.map((fld, _) => T.mkField(fld)).zip(fieldTypes).toMap
         RecordShape(Some(selfRefVar), fieldsToTypes) ^ Set(RootCapability)
       }
-      T.Module(typedRegionCap, substFields, position).withType(tpeOpt)
+      T.ModuleTree(typedRegionCap, substFields, position).withType(tpeOpt)
     }
   }
 
-  private def typePath(p: U.Path)(using ctx: Ctx): TypedTerm[T.Path] = p match {
-    case U.Identifier(id, position) =>
+  private def typePath(p: U.PathTree)(using ctx: Ctx): TypedTerm[T.PathTree] = p match {
+    case U.IdentifierTree(id, position) =>
       // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
-      T.Identifier(id, position).withType(ctx.varLookup(id))
-    case U.Select(lhs, field, position) =>
+      T.IdentifierTree(id, position).withType(ctx.varLookup(id))
+    case U.SelectTree(lhs, field, position) =>
       val typedLhs = typePath(lhs)
       val fld = U.mkField(field)
-      T.Select(typedLhs, convertField(field), position).withType(
+      T.SelectTree(typedLhs, convertField(field), position).withType(
         typedLhs.tpe.flatMap {
           case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(fld) =>
             Some(fields.apply(fld))
@@ -175,9 +175,9 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
       )
   }
 
-  private def convertIdent(ident: U.Identifier)(using Ctx): T.Identifier = {
-    val U.Identifier(id, position) = ident
-    T.Identifier(id, position)
+  private def convertIdent(ident: U.IdentifierTree)(using Ctx): T.IdentifierTree = {
+    val U.IdentifierTree(id, position) = ident
+    T.IdentifierTree(id, position)
   }
 
   private def typeTypeTree(tt: U.TypeTree)(using Ctx): T.TypeTree = {
@@ -185,21 +185,21 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
     T.TypeTree(typeShapeTree(shape), captureSet.map(typeCaptureSet), position)
   }
 
-  private def typeShapeTree(shape: U.TypeShapeTree)(using Ctx): T.TypeShapeTree = shape match {
-    case U.TopTypeTree(position) =>
-      T.TopTypeTree(position)
-    case U.AbsTypeTree(varId, varType, resType, position) =>
-      T.AbsTypeTree(convertIdent(varId), typeTypeTree(varType), typeTypeTree(resType), position)
-    case U.BoxTypeTree(boxedType, position) =>
-      T.BoxTypeTree(typeTypeTree(boxedType), position)
-    case U.UnitTypeTree(position) =>
-      T.UnitTypeTree(position)
-    case U.RefTypeTree(referencedType, position) =>
-      T.RefTypeTree(typeShapeTree(referencedType), position)
-    case U.RegTypeTree(position) =>
-      T.RegTypeTree(position)
-    case U.RecordTypeTree(selfRef, fieldsInOrder, position) =>
-      T.RecordTypeTree(
+  private def typeShapeTree(shape: U.ShapeTree)(using Ctx): T.ShapeTree = shape match {
+    case U.TopShapeTree(position) =>
+      T.TopShapeTree(position)
+    case U.AbsShapeTree(varId, varType, resType, position) =>
+      T.AbsShapeTree(convertIdent(varId), typeTypeTree(varType), typeTypeTree(resType), position)
+    case U.BoxShapeTree(boxedType, position) =>
+      T.BoxShapeTree(typeTypeTree(boxedType), position)
+    case U.UnitShapeTree(position) =>
+      T.UnitShapeTree(position)
+    case U.RefShapeTree(referencedType, position) =>
+      T.RefShapeTree(typeShapeTree(referencedType), position)
+    case U.RegShapeTree(position) =>
+      T.RegShapeTree(position)
+    case U.RecordShapeTree(selfRef, fieldsInOrder, position) =>
+      T.RecordShapeTree(
         selfRef.map(convertIdent),
         convertFields(fieldsInOrder, typeTypeTree),
         position
@@ -207,15 +207,15 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
   }
 
   private def typeCaptureSet(capSet: U.CaptureSetTree)(using ctx: Ctx): T.CaptureSetTree = capSet match {
-    case U.NonRootCaptureSet(capturedVarsInOrder, position) =>
+    case U.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       val typedCapturedVars = capturedVarsInOrder.map(typePath)
       typedCapturedVars.filter(_.tpe.exists(_.captureSet.isEmpty)).foreach { capVar =>
         ctx.reporter.warning(s"path ${pp(capVar)} has an empty capture set and is thus not a capability",
           capVar.term.position)
       }
-      T.NonRootCaptureSet(typedCapturedVars, position)
-    case U.RootCaptureSet(position) =>
-      T.RootCaptureSet(position)
+      T.NonRootCaptureSetTree(typedCapturedVars, position)
+    case U.RootCaptureSetTree(position) =>
+      T.RootCaptureSetTree(position)
   }
 
   private def convertField(fld: U.FieldTree)(using Ctx): T.FieldTree = fld match {
@@ -238,7 +238,7 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
     }
   }
 
-  private def mustBeAssignable(expectedShape: ShapeType, actualShape: ShapeType, pos: Position, ifAssignable: => Option[Type])
+  private def mustBeAssignable(expectedShape: Shape, actualShape: Shape, pos: Position, ifAssignable: => Option[Type])
                               (using ctx: Ctx): Option[Type] = {
     val isSub = actualShape.subshapeOf(expectedShape)
     if (isSub) {
@@ -248,7 +248,7 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
     }
   }
 
-  extension [A <: T.Term](term: A) {
+  extension [A <: T.TermTree](term: A) {
     private def withType(tpe: Option[Type]): TypedTerm[A] = TypedTerm(term, tpe)
     private def withType(tpe: Type): TypedTerm[A] = term.withType(Some(tpe))
   }
@@ -259,7 +259,7 @@ final class TypeCheckerPhase extends SimplePhase[U.Term, TypedTerm[T.Term]]("Typ
   private def capSetToString(capSet: Set[Capturable]): String =
     capSet.toSeq.sortBy(_.toString).mkString("{", ",", "}")
 
-  private def collectTypes[B <: T.Term](seq: Seq[(T.FieldTree, TypedTerm[B])]): Option[Seq[Type]] = {
+  private def collectTypes[B <: T.TermTree](seq: Seq[(T.FieldTree, TypedTerm[B])]): Option[Seq[Type]] = {
     seq.foldRight(Option(Nil)) {
       case ((_, TypedTerm(_, tpe)), acc) => for tpe <- tpe; tail <- acc yield tpe :: tail
     }

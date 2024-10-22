@@ -8,26 +8,26 @@ import gradcc.lang.Type
 def TermsPrettyprinter(
                         p: TermsProvider,
                         forceIgnoreTypes: Boolean = false
-                      )(term: p.R[p.Term]): String = {
+                      )(term: p.R[p.TermTree]): String = {
   
   val considerTypes = p.hasTypes && !forceIgnoreTypes
   val isb = IndentedStringBuilder()
   import isb.*
 
-  def ppTerm(term: p.Term, optType: Option[Type] = None): Unit = {
+  def ppTerm(term: p.TermTree, optType: Option[Type] = None): Unit = {
     term match {
-      case id: p.Identifier =>
+      case id: p.IdentifierTree =>
         ppId(id)
-      case p.Cap(position) =>
+      case p.CapTree(position) =>
         add(CapKw)
-      case p.Select(root, field, position) =>
+      case p.SelectTree(root, field, position) =>
         ppRecTerm(root)
         add(".")
         ppField(field)
-      case p.Box(boxed, position) =>
+      case p.BoxTree(boxed, position) =>
         add(BoxKw).add(" ")
         ppRecTerm(boxed)
-      case p.Abs(varId, tpe, body, position) =>
+      case p.AbsTree(varId, tpe, body, position) =>
         add(FnKw).add(" (").add(p.str(varId.id))
         add(": ")
         ppType(tpe)
@@ -38,21 +38,21 @@ def TermsPrettyprinter(
         incIndent().newLine()
         ppRecTerm(body)
         decIndent()
-      case p.RecordLiteral(fields, position) =>
+      case p.RecordLiteralTree(fields, position) =>
         addFieldsList(fields)
-      case p.UnitLiteral(position) =>
+      case p.UnitLiteralTree(position) =>
         add("()")
-      case p.App(callee, arg, position) =>
+      case p.AppTree(callee, arg, position) =>
         addIfConsiderTypes("(")
         ppRecTerm(callee)
         add(" ")
         ppRecTerm(arg)
         addIfConsiderTypes(")" + typeAnnot(optType))
-      case p.Unbox(captureSet, boxed, position) =>
+      case p.UnboxTree(captureSet, boxed, position) =>
         ppCapt(captureSet)
         add(" ").add(UnboxKw).add(" ")
         ppRecTerm(boxed)
-      case p.Let(varId, value, typeAnnotOpt, body, position) =>
+      case p.LetTree(varId, value, typeAnnotOpt, body, position) =>
         add(LetKw).add(" ")
         ppTerm(varId)
         typeAnnotOpt.foreach { typeAnnot =>
@@ -65,20 +65,20 @@ def TermsPrettyprinter(
         add(InKw).incIndent().newLine()
         ppRecTerm(body)
         decIndent()
-      case p.Region(position) =>
+      case p.RegionTree(position) =>
         add(RegionKw)
-      case p.Deref(ref, position) =>
+      case p.DerefTree(ref, position) =>
         add("!")
         ppRecTerm(ref)
-      case p.Assign(ref, newVal, position) =>
+      case p.AssignTree(ref, newVal, position) =>
         ppRecTerm(ref)
         add(" := ")
         ppRecTerm(newVal)
-      case p.Ref(regionCap, initVal, position) =>
+      case p.RefTree(regionCap, initVal, position) =>
         ppRecTerm(regionCap)
         add(".").add(RefKw).add(" ")
         ppRecTerm(initVal)
-      case p.Module(regionCap, fields, position) =>
+      case p.ModuleTree(regionCap, fields, position) =>
         add(ModKw).add("(")
         ppRecTerm(regionCap)
         add(") ")
@@ -86,7 +86,7 @@ def TermsPrettyprinter(
     }
   }
 
-  def ppRecTerm(r: p.R[p.Term]): Unit = {
+  def ppRecTerm(r: p.R[p.TermTree]): Unit = {
     val term = p.getTerm(r)
     ppTerm(term, p.getType(r))
   }
@@ -97,26 +97,26 @@ def TermsPrettyprinter(
     capt.foreach(ppCapt)
   }
 
-  def ppShape(shapeType: p.TypeShapeTree): Unit = shapeType match {
-    case p.TopTypeTree(position) =>
+  def ppShape(shapeType: p.ShapeTree): Unit = shapeType match {
+    case p.TopShapeTree(position) =>
       add(TopKw)
-    case p.AbsTypeTree(varId, varType, bodyType, position) =>
+    case p.AbsShapeTree(varId, varType, bodyType, position) =>
       add(FnKw).add(" (").add(p.str(varId.id))
       add(": ")
       ppType(varType)
       add(") ")
       ppType(bodyType)
-    case p.BoxTypeTree(boxedType, position) =>
+    case p.BoxShapeTree(boxedType, position) =>
       add(BoxKw).add(" ")
       ppType(boxedType)
-    case p.UnitTypeTree(position) =>
+    case p.UnitShapeTree(position) =>
       add(UnitKw)
-    case p.RefTypeTree(referencedType, position) =>
+    case p.RefShapeTree(referencedType, position) =>
       add(RefKw).add(" ")
       ppShape(referencedType)
-    case p.RegTypeTree(position) =>
+    case p.RegShapeTree(position) =>
       add(RegKw)
-    case p.RecordTypeTree(selfRef, fieldsInOrder, position) =>
+    case p.RecordShapeTree(selfRef, fieldsInOrder, position) =>
       selfRef.foreach { selfRef =>
         add(SelfKw).add(" ")
         add(p.str(selfRef.id))
@@ -132,11 +132,11 @@ def TermsPrettyprinter(
   }
 
   def ppCapt(cSet: p.CaptureSetTree): Unit = cSet match {
-    case p.NonRootCaptureSet(capturedVarsInOrder, position) =>
+    case p.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       add("{")
       sepList(capturedVarsInOrder, ", ")(ppRecTerm)
       add("}")
-    case p.RootCaptureSet(position) =>
+    case p.RootCaptureSetTree(position) =>
       add("{").add(CapKw).add("}")
   }
 
@@ -147,7 +147,7 @@ def TermsPrettyprinter(
       add(RegKw)
   }
 
-  def ppId(id: p.Identifier): Unit = add(p.str(id.id))
+  def ppId(id: p.IdentifierTree): Unit = add(p.str(id.id))
 
   def typeAnnot(tpe: Option[Type]): String = {
     val typeDescr = tpe.map(_.toString).getOrElse("??")
@@ -160,7 +160,7 @@ def TermsPrettyprinter(
     }
   }
 
-  def addFieldsList(fields: Seq[(p.FieldTree, p.R[p.Path])]): Unit = {
+  def addFieldsList(fields: Seq[(p.FieldTree, p.R[p.PathTree])]): Unit = {
     val multiline = considerTypes && fields.size > 1
     add("{")
     if (multiline) {

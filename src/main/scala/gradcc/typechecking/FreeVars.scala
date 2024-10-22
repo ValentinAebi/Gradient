@@ -10,7 +10,7 @@ extension (v: UniqueVarId) {
     isFreeIn(shape) || captureSet.exists(v.isFreeIn)
   }
 
-  def isFreeIn(shape: ShapeType): Boolean = shape match {
+  def isFreeIn(shape: Shape): Boolean = shape match {
     case TopShape => false
     case AbsShape(varId, varType, resType) => varId != v && (isFreeIn(varType) || isFreeIn(resType))
     case BoxShape(boxed) => isFreeIn(boxed)
@@ -21,8 +21,8 @@ extension (v: UniqueVarId) {
   }
 
   def isFreeIn(capturable: Capturable): Boolean = capturable match {
-    case CapVar(variable) => v == variable
-    case CapPath(lhs, select) => isFreeIn(lhs)
+    case VarPath(variable) => v == variable
+    case SelectPath(lhs, select) => isFreeIn(lhs)
     case RootCapability => false
   }
 

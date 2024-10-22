@@ -13,13 +13,13 @@ private[typechecking] case class Ctx(store: Store, reporter: Reporter) {
   
   def varLookup(varId: VarId): Option[Type] = store.apply(varId)
 
-  def pathLookup(capabilityPath: CapabilityPath): Option[Type] = capabilityPath match {
-    case CapVar(root) => store.apply(root)
-    case CapPath(lhs, select) =>
+  def pathLookup(capabilityPath: Path): Option[Type] = capabilityPath match {
+    case VarPath(root) => store.apply(root)
+    case SelectPath(lhs, select) =>
       pathLookup(lhs).flatMap {
         case Type(RecordShape(selfRef, fields), _) =>
           fields.get(select).map { fieldType =>
-            selfRef.map(selfRef => substitute(fieldType)(using Map(CapVar(selfRef) -> lhs))).getOrElse(fieldType)
+            selfRef.map(selfRef => substitute(fieldType)(using Map(VarPath(selfRef) -> lhs))).getOrElse(fieldType)
           }
         case _ => None
       }

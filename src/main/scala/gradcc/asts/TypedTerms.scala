@@ -4,14 +4,14 @@ import gradcc.lang.Type
 
 object TypedTerms extends UidTermsProvider {
 
-  override type R[+T <: Term] = TypedTerm[T]
+  override type R[+T <: TermTree] = TypedTerm[T]
 
-  override def getTerm[T <: TypedTerms.Term](r: TypedTerm[T]): T = r.term
+  override def getTerm[T <: TypedTerms.TermTree](r: TypedTerm[T]): T = r.term
 
-  override def getType[T <: TypedTerms.Term](r: TypedTerm[T]): Option[Type] = r.tpe
+  override def getType[T <: TypedTerms.TermTree](r: TypedTerm[T]): Option[Type] = r.tpe
 
   override val hasTypes: Boolean = true
 
 }
 
-final case class TypedTerm[+T <: TypedTerms.Term](term: T, tpe: Option[Type])
+final case class TypedTerm[+T <: TypedTerms.TermTree](term: T, tpe: Option[Type])

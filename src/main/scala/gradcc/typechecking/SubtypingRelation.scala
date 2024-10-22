@@ -14,11 +14,11 @@ object SubtypingRelation {
     if (l.size == 1) {
       l.head match {
         // Sc-path
-        case p: CapabilityPath if ctx.pathLookup(p).exists(_.captureSet.subcaptureOf(r)) => true
+        case p: Path if ctx.pathLookup(p).exists(_.captureSet.subcaptureOf(r)) => true
         // Sc-elem
         case p if r.contains(p) => true
         // Sc-mem
-        case CapPath(lhs, select) if Set(lhs).subcaptureOf(r) => true
+        case SelectPath(lhs, select) if Set(lhs).subcaptureOf(r) => true
         case _ => false
       }
     } else {
@@ -27,7 +27,7 @@ object SubtypingRelation {
     }
   }
 
-  extension (l: ShapeType) def subshapeOf(r: ShapeType)(using Ctx): Boolean = (l, r) match {
+  extension (l: Shape) def subshapeOf(r: Shape)(using Ctx): Boolean = (l, r) match {
     // Top
     case (_, TopShape) => true
     // Refl

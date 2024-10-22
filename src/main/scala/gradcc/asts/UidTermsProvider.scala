@@ -13,29 +13,29 @@ trait UidTermsProvider extends TermsProvider {
     typeTree.captureSet.map(mkCaptureSet).getOrElse(Set.empty)
   )
 
-  def mkShape(typeShapeTree: TypeShapeTree): ShapeType = typeShapeTree match {
-    case TopTypeTree(position) => TopShape
-    case AbsTypeTree(varId, varType, bodyType, position) =>
+  def mkShape(typeShapeTree: ShapeTree): Shape = typeShapeTree match {
+    case TopShapeTree(position) => TopShape
+    case AbsShapeTree(varId, varType, bodyType, position) =>
       AbsShape(varId.id, mkType(varType), mkType(bodyType))
-    case BoxTypeTree(boxedType, position) => BoxShape(mkType(boxedType))
-    case UnitTypeTree(position) => UnitShape
-    case RefTypeTree(referencedType, position) => RefShape(mkShape(referencedType))
-    case RegTypeTree(position) => RegionShape
-    case RecordTypeTree(selfRef, fieldsInOrder, position) => RecordShape(
+    case BoxShapeTree(boxedType, position) => BoxShape(mkType(boxedType))
+    case UnitShapeTree(position) => UnitShape
+    case RefShapeTree(referencedType, position) => RefShape(mkShape(referencedType))
+    case RegShapeTree(position) => RegionShape
+    case RecordShapeTree(selfRef, fieldsInOrder, position) => RecordShape(
       selfRef.map(_.id),
       fieldsInOrder.map((fld, typeTree) => (mkField(fld), mkType(typeTree))).toMap
     )
   }
 
   def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
-    case NonRootCaptureSet(capturedVarsInOrder, position) =>
+    case NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       capturedVarsInOrder.map(capV => mkCapabilityPath(getTerm(capV))).toSet
-    case RootCaptureSet(position) => Set(RootCapability)
+    case RootCaptureSetTree(position) => Set(RootCapability)
   }
 
-  def mkCapabilityPath(capPath: Path): CapabilityPath = capPath match {
-    case Identifier(id, position) => CapVar(id)
-    case Select(root, fld, position) => CapPath(mkCapabilityPath(getTerm(root)), mkField(fld))
+  def mkCapabilityPath(capPath: PathTree): Path = capPath match {
+    case IdentifierTree(id, position) => VarPath(id)
+    case SelectTree(root, fld, position) => SelectPath(mkCapabilityPath(getTerm(root)), mkField(fld))
   }
 
   def mkField(fld: FieldTree): RecordField = fld match {
