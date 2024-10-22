@@ -59,6 +59,9 @@ def TermsPrettyprinter(
           add(": ")
           ppType(typeAnnot)
         }
+        if (typeAnnotOpt.isEmpty){
+          addIfConsiderTypes(typeAnnot(p.getType(value)))
+        }
         add(" =").incIndent().newLine()
         ppRecTerm(value)
         decIndent().newLine()
