@@ -1,0 +1,8 @@
+
+fn (f: (r: Reg^) -> Reg^{r})
+    let m =
+        let r = region in
+        let s = f r in
+            mod(r) { me = s }
+    in
+        m.me
