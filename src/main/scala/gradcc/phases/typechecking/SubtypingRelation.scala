@@ -4,10 +4,11 @@ import gradcc.lang.*
 
 object SubtypingRelation {
 
-  extension (l: Type) def subtypeOf(r: Type)(using Ctx): Boolean = {
-    val Type(lSh, lCap) = l
-    val Type(rSh, rCap) = r
-    lSh.subshapeOf(rSh) && lCap.subcaptureOf(rCap)
+  extension (l: Type) def subtypeOf(r: Type)(using Ctx): Boolean = (l, r) match {
+    case (Type(AbsShape(lv, lvt, lrt), lc), Type(AbsShape(rv, rvt, rrt), rc)) if lv != rv =>
+      l.subtypeOf(substitute(Type(AbsShape(lv, rvt, rrt), rc))(using Map(VarPath(rv) -> VarPath(lv))))
+    case (Type(lSh, lCap), Type(rSh, rCap)) =>
+      lSh.subshapeOf(rSh) && lCap.subcaptureOf(rCap)
   }
 
   extension (l: Set[Capturable]) def subcaptureOf(r: Set[Capturable])(using ctx: Ctx): Boolean = {

@@ -1,6 +1,6 @@
 
 let f =
-    let g = fn (r: Reg^)(u: Unit) r in
+    let g: (r: Reg^) -> (u: Unit) ->{r} Reg^ = fn (r: Reg^)(u: Unit) r in
         let s = region in
             g s
 in
