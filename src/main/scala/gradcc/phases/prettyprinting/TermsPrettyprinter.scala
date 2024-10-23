@@ -96,42 +96,52 @@ def TermsPrettyprinter(
 
   def ppType(tpe: p.TypeTree): Unit = {
     val p.TypeTree(shape, capt, position) = tpe
-    ppShape(shape)
-    capt.foreach(ppCapt)
-  }
 
-  def ppShape(shapeType: p.ShapeTree): Unit = shapeType match {
-    case p.TopShapeTree(position) =>
-      add(TopKw)
-    case p.AbsShapeTree(varId, varType, bodyType, position) =>
-      add(FnKw).add(" (").add(p.str(varId.id))
-      add(": ")
-      ppType(varType)
-      add(") ")
-      ppType(bodyType)
-    case p.BoxShapeTree(boxedType, position) =>
-      add(BoxKw).add(" ")
-      ppType(boxedType)
-    case p.UnitShapeTree(position) =>
-      add(UnitKw)
-    case p.RefShapeTree(referencedType, position) =>
-      add(RefKw).add(" ")
-      ppShape(referencedType)
-    case p.RegShapeTree(position) =>
-      add(RegKw)
-    case p.RecordShapeTree(selfRef, fieldsInOrder, position) =>
-      selfRef.foreach { selfRef =>
-        add(SelfKw).add(" ")
-        add(p.str(selfRef.id))
-        add(" ").add(InKw).add(" ")
-      }
-      add("{ ")
-      sepList(fieldsInOrder, ", ") { (fld, tpe) =>
-        ppField(fld)
-        add(": ")
-        ppType(tpe)
-      }
-      add(" }")
+    def addCaptIfAny() = capt.foreach { cp =>
+      add("^")
+      ppCapt(cp)
+    }
+
+    shape match {
+      case p.TopShapeTree(position) =>
+        add(TopKw)
+        addCaptIfAny()
+      case p.AbsShapeTree(varId, varType, bodyType, position) =>
+        add("(").add(p.str(varId.id)).add(" : ")
+        ppType(varType)
+        add(") ->")
+        capt.foreach(ppCapt)
+        add(" ")
+        ppType(bodyType)
+      case p.BoxShapeTree(boxedType, position) =>
+        add(BoxKw).add(" ")
+        ppType(boxedType)
+        addCaptIfAny()
+      case p.UnitShapeTree(position) =>
+        add(UnitKw)
+        addCaptIfAny()
+      case p.RefShapeTree(referencedType, position) =>
+        add(RefKw.withFirstUppercase).add(" ")
+        ppType(p.TypeTree(referencedType, capt, referencedType.position))
+        addCaptIfAny()
+      case p.RegShapeTree(position) =>
+        add(RegKw.withFirstUppercase)
+        addCaptIfAny()
+      case p.RecordShapeTree(selfRef, fieldsInOrder, position) =>
+        selfRef.foreach { selfRef =>
+          add(SelfKw).add(" ")
+          add(p.str(selfRef.id))
+          add(" ").add(InKw).add(" ")
+        }
+        add("{ ")
+        sepList(fieldsInOrder, ", ") { (fld, tpe) =>
+          ppField(fld)
+          add(": ")
+          ppType(tpe)
+        }
+        add(" }")
+        addCaptIfAny()
+    }
   }
 
   def ppCapt(cSet: p.CaptureSetTree): Unit = cSet match {

@@ -17,4 +17,7 @@ enum Keyword(val str: String) {
   case Using extends Keyword("using")
 
   override def toString: String = str
+  
+  def withFirstUppercase: String = str.head.toUpper + str.tail
+  
 }
