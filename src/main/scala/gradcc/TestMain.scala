@@ -27,7 +27,7 @@ import scala.util.Using
       case Success(value) =>
         s"\n$value"
       case NonFatal(faultyValue) =>
-        s" !!! There were error(s) !!!\n\n$faultyValue"
+        s"\n !!! There were error(s) !!!\n\n$faultyValue"
       case Fatal(fatalErrorException) =>
         fatalErrorException.toString
   )
