@@ -27,3 +27,25 @@ extension (v: UniqueVarId) {
   }
 
 }
+
+def freeVars(tpe: Type): Set[UniqueVarId] = {
+  val Type(shape, captureSet) = tpe
+  freeVars(shape) ++ captureSet.flatMap(freeVars)
+}
+
+def freeVars(shape: Shape): Set[UniqueVarId] = shape match {
+  case TopShape => Set.empty
+  case AbsShape(varId, varType, resType) =>
+    freeVars(varType) ++ (freeVars(resType) - varId)
+  case BoxShape(boxed) => freeVars(boxed)
+  case UnitShape => Set.empty
+  case RefShape(referenced) => freeVars(referenced)
+  case RegionShape => Set.empty
+  case RecordShape(selfRef, fields) => fields.flatMap((_, tpe) => freeVars(tpe)).toSet -- selfRef
+}
+
+def freeVars(capturable: Capturable): Set[UniqueVarId] = capturable match {
+  case VarPath(root) => Set(root)
+  case SelectPath(lhs, field) => freeVars(lhs)
+  case RootCapability => Set.empty
+}

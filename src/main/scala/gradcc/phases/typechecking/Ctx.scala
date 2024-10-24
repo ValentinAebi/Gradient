@@ -7,9 +7,28 @@ import gradcc.reporting.{Position, Reporter}
 
 private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 
-private[typechecking] case class Ctx(store: Store, reporter: Reporter) {
+private[typechecking] case class Ctx(
+                                      store: Store,
+                                      pathEquivalences: Seq[(Path, Path)],
+                                      selectEquivalences: Seq[(Path, RecordField, Path)],
+                                      reporter: Reporter
+                                    ) {
 
-  def withNewBinding(varId: UniqueVarId, varType: Option[Type]): Ctx = copy(store = store + (varId -> varType))
+  // TODO optimize (more replications of this object than needed)
+
+  def withNewBinding(varId: UniqueVarId, varType: Option[Type]): Ctx =
+    copy(store = store + (varId -> varType))
+
+  def withNewPathEquivalence(p: Path, q: Path): Ctx =
+    copy(pathEquivalences = pathEquivalences :+ (p, q))
+
+  def withNewSelectEquivalence(owner: Path, fld: RecordField, value: Path): Ctx =
+    copy(selectEquivalences = selectEquivalences :+ (owner, fld, value))
+
+  def withoutEquivalences: Ctx = copy(
+    pathEquivalences = Seq.empty,
+    selectEquivalences = Seq.empty
+  )
 
   def varLookup(varId: VarId): Option[Type] = store.get(varId).flatten
 
@@ -23,6 +42,17 @@ private[typechecking] case class Ctx(store: Store, reporter: Reporter) {
             fields.get(select)
           case _ => None
         }
+  }
+
+  def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
+    val pec = PathsEquivalenceComputer.empty
+    for ((p, q) <- pathEquivalences){
+      pec.assertEquivalent(p, q)
+    }
+    for ((owner, fld, value) <- selectEquivalences){
+      pec.assertSelectEquiv(owner, fld, value)
+    }
+    pec.expressAsPathFrom(origin, target)
   }
 
   def reportError(msg: String, pos: Position): None.type = {

@@ -1,12 +1,12 @@
 package gradcc.phases.typechecking
 
 import gradcc.*
-import gradcc.asts.{TypedTerm, TypedTerms as T, UniquelyNamedTerms as U}
+import gradcc.asts.{TypedTerm, UniqueVarId, TypedTerms as T, UniquelyNamedTerms as U}
 import gradcc.lang.*
-import gradcc.phases.prettyprinting.TermsPrettyprinter
-import gradcc.reporting.{Position, Reporter}
-import SubtypingRelation.*
 import gradcc.phases.SimplePhase
+import gradcc.phases.prettyprinting.TermsPrettyprinter
+import gradcc.phases.typechecking.SubtypingRelation.*
+import gradcc.reporting.{Position, Reporter}
 
 // TODO pack and unpack
 // TODO double-check every typing/subtyping/subcapturing rule
@@ -19,7 +19,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   override val acceptsFaultyInput: Boolean = false
 
   override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTerm[T.TermTree] =
-    typeTerm(in)(using Ctx(Map.empty, reporter))
+    typeTerm(in)(using Ctx(Map.empty, Seq.empty, Seq.empty, reporter))
 
   private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTerm[T.TermTree] = t match {
     case p: U.PathTree => typePath(p)
@@ -28,7 +28,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
     case abs@U.AbsTree(varIdent, varTypeTree, body, position) => {
       val varType = U.mkType(varTypeTree)
       val varId = varIdent.id
-      val typedBody = typeTerm(body)(using ctx.withNewBinding(varId, Some(varType)))
+      val typedBody = typeTerm(body)(using ctx.withNewBinding(varId, Some(varType)).withoutEquivalences)
       T.AbsTree(convertIdent(varIdent), typeTypeTree(varTypeTree), typedBody, position).withType(
         typedBody.tpe.map(AbsShape(varId, varType, _) ^ cv(abs))
       )
@@ -40,13 +40,31 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       )
     case recordLit@U.RecordLiteralTree(fields, position) =>
       val typedFields = convertFields(fields, typePath)
-      T.RecordLiteralTree(typedFields, position).withType {
-        collectTypes(typedFields).map { fldTypes =>
-          val fieldsToType = fields.map((fld, _) => U.mkField(fld)).zip(fldTypes).toMap
-          val recordCapSet = fldTypes.flatMap(_.captureSet).toSet
-          RecordShape(None, fieldsToType) ^ recordCapSet
+      val fieldsToTypesAndCapSetOpt = collectTypes(typedFields).map { fldTypes =>
+        val fieldsToType = fields.map((fld, _) => U.mkField(fld)).zip(fldTypes).toMap
+        val recordCapSet = fldTypes.flatMap(_.captureSet).toSet
+        (fieldsToType, recordCapSet)
+      }
+      val selfReferringTypeOpt = fieldsToTypesAndCapSetOpt.map { (rawFieldsToTypes, rawCapSet) =>
+        val freeVariables = rawFieldsToTypes.flatMap((_, tpe) => freeVars(tpe))
+        val selfRef = varCreator.nextVar(Keyword.SelfKw.str)
+        val selfAwareCtx = ctxWithEquivalences(ctx, selfRef, recordLit)
+        val selfRefPath = VarPath(selfRef)
+        val substMap: Map[Capturable, Path] =
+          (for (fv <- freeVariables; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, VarPath(fv))) yield {
+            VarPath(fv) -> pathFromSelf
+          }).toMap
+        val substFieldsToTypes = rawFieldsToTypes.map((fld, tpe) => (fld, substitute(tpe)(using substMap)))
+        val filteredCapSet = rawCapSet -- substMap.keys
+        val optSelfRef = if substMap.isEmpty then None else Some(selfRef)
+        RecordShape(optSelfRef, substFieldsToTypes) ^ filteredCapSet
+      }
+      val letTypeOpt = selfReferringTypeOpt.orElse {
+        fieldsToTypesAndCapSetOpt.map { (fieldsToTypes, capSet) =>
+          RecordShape(None, fieldsToTypes) ^ capSet
         }
       }
+      T.RecordLiteralTree(typedFields, position).withType(letTypeOpt)
     case U.UnitLiteralTree(position) =>
       T.UnitLiteralTree(position).withType(UnitShape ^ Set.empty)
     case U.AppTree(callee, arg, position) => {
@@ -84,11 +102,11 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         mustBeAssignable(U.mkType(typeAnnot), rawValueType, typeAnnot.position, None)
       }
       val valueType = typeAnnot.map(U.mkType).orElse(typedValue.tpe)
-      val typedBody = typeTerm(body)(using ctx.withNewBinding(varId.id, valueType))
+      val typedBody = typeTerm(body)(using ctxWithEquivalences(ctx, varId.id, value).withNewBinding(varId.id, valueType))
       typedBody.tpe.foreach { bodyType =>
         if (varId.id.isFreeIn(bodyType)) {
           ctx.reportError(
-            s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id.fullDescr}",
+            s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id}",
             position
           )
         }
@@ -246,6 +264,19 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       ifAssignable
     } else {
       ctx.reportError(s"type mismatch: expected $expectedShape, but was $actualShape", pos)
+    }
+  }
+
+  private def ctxWithEquivalences(ctx: Ctx, varId: UniqueVarId, value: U.TermTree): Ctx = {
+    value match {
+      case pathTree: U.PathTree =>
+        ctx.withNewPathEquivalence(VarPath(varId), U.mkPath(pathTree))
+      case recordLiteralTree: U.RecordLiteralTree =>
+        val varPath = VarPath(varId)
+        recordLiteralTree.fields.foldLeft(ctx){
+          case (ctx, (fld, fldVal)) => ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkPath(fldVal))
+        }
+      case _ => ctx
     }
   }
 

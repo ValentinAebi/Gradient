@@ -22,8 +22,13 @@ def substitute(shape: Shape)(using subst: Map[Capturable, Path]): Shape = shape 
     RefShape(substitute(referenced))
   case RegionShape =>
     RegionShape
-  case RecordShape(selfRef, fields) =>
-    RecordShape(selfRef, fields.map((fld, tpe) => (fld, substitute(tpe))))
+  case recordShape: RecordShape =>
+    substitute(recordShape)
+}
+
+def substitute(recordShape: RecordShape)(using subst: Map[Capturable, Path]): RecordShape = {
+  val RecordShape(selfRef, fields) = recordShape
+  RecordShape(selfRef, fields.map((fld, tpe) => (fld, substitute(tpe))))
 }
 
 def substitute(capturable: Capturable)(using subst: Map[Capturable, Path]): Capturable = {

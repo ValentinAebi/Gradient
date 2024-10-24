@@ -14,11 +14,7 @@ object UniquelyNamedTerms extends UidTermsProvider {
 }
 
 final case class UniqueVarId(varName: String, idx: Int){
-
-  def internalName: String = s"$varName#$idx"
-
-  def fullDescr: String = s"$varName (internally $internalName)"
   
-  override def toString: String = internalName
+  override def toString: String = s"$varName#$idx"
   
 }
