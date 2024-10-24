@@ -5,13 +5,14 @@ import gradcc.lang.{Path, RecordField, SelectPath, VarPath}
 import gradcc.phases.typechecking.PathsEquivalenceComputer.*
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.mutable
 import scala.collection.mutable.{ListBuffer as MutList, Map as MutMap, Set as MutSet}
 
 
 final class PathsEquivalenceComputer private(
-                                  private val vars: MutMap[UniqueVarId, NodeId],
-                                  private val nodes: MutMap[NodeId, Node]
-                                ) {
+                                              private val vars: MutMap[UniqueVarId, NodeId],
+                                              private val nodes: MutMap[NodeId, Node]
+                                            ) {
 
   def deepCopy: PathsEquivalenceComputer =
     PathsEquivalenceComputer(this.vars.map(identity), this.nodes.map((nid, n) => (nid, n.deepCopy)))
@@ -26,38 +27,31 @@ final class PathsEquivalenceComputer private(
     assertEquivalent(SelectPath(owner, select), value)
 
   def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
-    
+
     val originId = findOrCreateNodeAndParents(origin)
     val targetId = findOrCreateNodeAndParents(target)
     val targetNode = nodes(targetId)
 
-    // TODO switch to BFS
-    
-    def search(start: NodeId, selectsReversed: List[RecordField]): Option[List[RecordField]] = {
-      if targetNode.referringIds.contains(start)
-      then Some(selectsReversed)
-      else {
-        val startNode = nodes(start)
-        val iter = startNode.fields.iterator
-        while (iter.hasNext) {
-          val (fld, subNodeId) = iter.next()
-          search(subNodeId, fld :: selectsReversed) match {
-            case Some(selects) =>
-              return Some(selects)
-            case None => ()
-          }
-        }
-        None
+    val searchQueue = mutable.Queue.empty[(NodeId, Path)]
+    val alreadyEnqueued = MutSet.empty[NodeId]
+
+    def enq(nodeId: NodeId, p: Path): Unit = {
+      searchQueue.addOne((nodeId, p))
+      alreadyEnqueued.addOne(nodeId)
+    }
+
+    enq(originId, origin)
+    while (searchQueue.nonEmpty) {
+      val (startId, p) = searchQueue.dequeue()
+      if (targetNode.referringIds.contains(startId)) {
+        return Some(p)
+      }
+      for ((fld, nodeId) <- nodes(startId).fields if !alreadyEnqueued.contains(nodeId)) {
+        enq(nodeId, SelectPath(p, fld))
       }
     }
 
-    def assemblePath(reversedSelects: List[RecordField]): Path = reversedSelects match {
-      case lastField :: otherFields =>
-        SelectPath(assemblePath(otherFields), lastField)
-      case Nil => origin
-    }
-
-    search(originId, Nil).map(assemblePath)
+    None
   }
 
   /**
