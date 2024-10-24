@@ -67,7 +67,6 @@ def TermsPrettyprinter(
         decIndent().newLine()
         add(InKw).incIndent().newLine()
         ppRecTerm(body)
-        addIfConsiderTypes(typeAnnot(p.getType(body)))
         decIndent()
       case p.RegionTree(position) =>
         add(RegionKw)
