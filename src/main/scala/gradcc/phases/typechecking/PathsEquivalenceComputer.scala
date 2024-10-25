@@ -26,6 +26,11 @@ final class PathsEquivalenceComputer private(
   def assertSelectEquiv(owner: Path, select: RecordField, value: Path): Unit =
     assertEquivalent(SelectPath(owner, select), value)
 
+  def getEquivClass(id: UniqueVarId): Set[UniqueVarId] = {
+    val targetNode = nodes(findOrCreateNodeAndParents(VarPath(id)))
+    vars.filter((_, nid) => nodes(nid) == targetNode).keySet.toSet
+  }
+
   def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
 
     val originId = findOrCreateNodeAndParents(origin)
@@ -80,7 +85,7 @@ final class PathsEquivalenceComputer private(
     case VarPath(root) =>
       vars.getOrElse(root, {
         val nodeId = nextId()
-        val node = Node(MutMap.empty, MutList(nodeId))
+        val node = Node(MutMap.empty, MutSet(nodeId))
         nodes(nodeId) = node
         vars(root) = nodeId
         nodeId
@@ -90,7 +95,7 @@ final class PathsEquivalenceComputer private(
       nodes(parentId).fields.getOrElse(field, {
         val parentNode = nodes(parentId)
         val nodeId = nextId()
-        val node = Node(MutMap.empty, MutList(nodeId))
+        val node = Node(MutMap.empty, MutSet(nodeId))
         nodes(nodeId) = node
         parentNode.fields(field) = nodeId
         nodeId
@@ -121,7 +126,7 @@ object PathsEquivalenceComputer {
 
   private class Node(
                       val fields: MutMap[RecordField, NodeId],
-                      val referringIds: MutList[NodeId]
+                      val referringIds: MutSet[NodeId]
                     ) {
 
     def deepCopy: Node = Node(

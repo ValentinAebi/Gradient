@@ -1,0 +1,9 @@
+
+let g =
+    fn (r: Reg^)
+        let x = r in
+            fn (a: Ref Reg)
+                let f = fn (u: Unit) x in
+                    { func = f, ptr = a, t = r }
+in
+    g

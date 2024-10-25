@@ -8,7 +8,8 @@ import gradcc.phases.prettyprinting.TermsPrettyprinter
 import gradcc.phases.typechecking.SubtypingRelation.*
 import gradcc.reporting.{Position, Reporter}
 
-// TODO pack and unpack
+// TODO check pack with Alex
+// TODO tests/examples with references (and other features)
 // TODO double-check every typing/subtyping/subcapturing rule
 
 final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTree]]("Typechecker") {
@@ -28,7 +29,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
     case abs@U.AbsTree(varIdent, varTypeTree, body, position) => {
       val varType = U.mkType(varTypeTree)
       val varId = varIdent.id
-      val typedBody = typeTerm(body)(using ctx.withNewBinding(varId, Some(varType)).withoutEquivalences)
+      val typedBody = typeTerm(body)(using ctx.withNewBinding(varId, Some(varType)))
       T.AbsTree(convertIdent(varIdent), typeTypeTree(varTypeTree), typedBody, position).withType(
         typedBody.tpe.map(AbsShape(varId, varType, _) ^ cv(abs))
       )
@@ -102,16 +103,21 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         mustBeAssignable(U.mkType(typeAnnot), rawValueType, typeAnnot.position, None)
       }
       val valueType = typeAnnot.map(U.mkType).orElse(typedValue.tpe)
-      val typedBody = typeTerm(body)(using ctxWithEquivalences(ctx, varId.id, value).withNewBinding(varId.id, valueType))
-      typedBody.tpe.foreach { bodyType =>
-        if (varId.id.isFreeIn(bodyType)) {
-          ctx.reportError(
-            s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id}",
-            position
-          )
+      val bodyCtx = ctxWithEquivalences(ctx, varId.id, value).withNewBinding(varId.id, valueType)
+      val typedBody = typeTerm(body)(using bodyCtx)
+      val letTypeOpt =
+        typedBody.tpe.flatMap { bodyType =>
+          if (varId.id.isFreeIn(bodyType)) {
+            bodyCtx.equivalenceClassOf(varId.id).filterNot(_ == varId.id).headOption.map { replId =>
+              substitute(bodyType)(using Map(VarPath(varId.id) -> VarPath(replId)))
+            }.orElse(
+              ctx.reportError(
+                s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id}",
+                position
+              ))
+          } else Some(bodyType)
         }
-      }
-      T.LetTree(convertIdent(varId), typedValue, typeAnnot.map(typeTypeTree), typedBody, position).withType(typedBody.tpe)
+      T.LetTree(convertIdent(varId), typedValue, typeAnnot.map(typeTypeTree), typedBody, position).withType(letTypeOpt)
     }
     case U.RegionTree(position) =>
       T.RegionTree(position).withType(RegionShape ^ Set(RootCapability))
@@ -273,7 +279,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         ctx.withNewPathEquivalence(VarPath(varId), U.mkPath(pathTree))
       case recordLiteralTree: U.RecordLiteralTree =>
         val varPath = VarPath(varId)
-        recordLiteralTree.fields.foldLeft(ctx){
+        recordLiteralTree.fields.foldLeft(ctx) {
           case (ctx, (fld, fldVal)) => ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkPath(fldVal))
         }
       case _ => ctx

@@ -25,11 +25,6 @@ private[typechecking] case class Ctx(
   def withNewSelectEquivalence(owner: Path, fld: RecordField, value: Path): Ctx =
     copy(selectEquivalences = selectEquivalences :+ (owner, fld, value))
 
-  def withoutEquivalences: Ctx = copy(
-    pathEquivalences = Seq.empty,
-    selectEquivalences = Seq.empty
-  )
-
   def varLookup(varId: VarId): Option[Type] = store.get(varId).flatten
 
   def pathLookup(capabilityPath: Path): Option[Type] = capabilityPath match {
@@ -45,18 +40,27 @@ private[typechecking] case class Ctx(
   }
 
   def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
-    val pec = PathsEquivalenceComputer.empty
-    for ((p, q) <- pathEquivalences){
-      pec.assertEquivalent(p, q)
-    }
-    for ((owner, fld, value) <- selectEquivalences){
-      pec.assertSelectEquiv(owner, fld, value)
-    }
-    pec.expressAsPathFrom(origin, target)
+    createPathsEquivalenceComputer().expressAsPathFrom(origin, target)
+  }
+
+  def equivalenceClassOf(id: UniqueVarId): Set[UniqueVarId] = {
+    createPathsEquivalenceComputer().getEquivClass(id)
   }
 
   def reportError(msg: String, pos: Position): None.type = {
     reporter.error(msg, pos)
     None
   }
+
+  private def createPathsEquivalenceComputer(): PathsEquivalenceComputer = {
+    val pec = PathsEquivalenceComputer.empty
+    for ((p, q) <- pathEquivalences) {
+      pec.assertEquivalent(p, q)
+    }
+    for ((owner, fld, value) <- selectEquivalences) {
+      pec.assertSelectEquiv(owner, fld, value)
+    }
+    pec
+  }
+  
 }
