@@ -341,6 +341,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
     }
 
     def maybeWithCaptureSet(shape: ShapeTree, tokens: Tokens): (ShapeTree | TypeTree, Tokens) = tokens match {
+      case OperatorToken(Hat, hatPos) :: OperatorToken(OpenBrace, _) :: KeywordToken(CapKw, _) ::
+        OperatorToken(CloseBrace, _) :: rem =>
+        (TypeTree(shape, Some(RootCaptureSetTree(hatPos)), shape.position), rem)
       case OperatorToken(Hat, hatPos) :: OperatorToken(OpenBrace, _) :: rem1 =>
         val (paths, rem2) = parseCommaSeparatedPaths(rem1)
         expectOperator(CloseBrace, rem2, "unclosed capture set") {
