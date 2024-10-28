@@ -184,6 +184,8 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
             rem3 match {
               case OperatorToken(Equal, _) :: rem4 =>
                 parseLetFollow(id, Some(tpe), rem4, letPos, idPos)
+              case _ =>
+                reporter.fatal("malformed let, expected '=' after variable", rem3.headPos)
             }
           case _ =>
             reporter.fatal("malformed let, expected 'let <var> = <value> in <body>'", rem1.headPos)
