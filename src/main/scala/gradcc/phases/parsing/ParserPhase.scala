@@ -249,6 +249,13 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
         }
       }
 
+      // {cap} unbox
+      case OperatorToken(OpenBrace, openBracePos) :: KeywordToken(CapKw, _) :: OperatorToken(CloseBrace, _)
+        :: KeywordToken(UnboxKw, _) :: rem1 => {
+        val (p, rem2) = parsePath(rem1, s"expected a path after $UnboxKw")
+        (UnboxTree(RootCaptureSetTree(openBracePos), p, openBracePos), rem2)
+      }
+
       case OperatorToken(OpenBrace, _) :: rem =>
         reporter.fatal("unrecognized term: neither a record, nor an unbox term, could be constructed", rem.headPos)
 
