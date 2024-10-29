@@ -1,0 +1,12 @@
+
+let m =
+    let r = region in
+    let u = () in
+    let s = r.ref u in
+    let f = fn (u: Unit) s in
+    let p = { a = s, b = r } in
+        { f = f, p = p }
+in
+    let g = m.f in
+    let p = m.p in
+        { p = p, g = g }
