@@ -47,14 +47,13 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         (fieldsToType, recordCapSet)
       }
       val selfReferringTypeOpt = fieldsToTypesAndCapSetOpt.map { (rawFieldsToTypes, rawCapSet) =>
-        // FIXME should compute free paths instead of free variables
-        val freeVariables = rawFieldsToTypes.flatMap((_, tpe) => freeVars(tpe))
+        val freePathsInFields = rawFieldsToTypes.flatMap((_, tpe) => freePaths(tpe))
         val selfRef = varCreator.nextVar(Keyword.SelfKw.str)
         val selfAwareCtx = ctxWithEquivalences(ctx, selfRef, recordLit)
         val selfRefPath = VarPath(selfRef)
         val substMap: Map[Capturable, Path] =
-          (for (fv <- freeVariables; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, VarPath(fv))) yield {
-            VarPath(fv) -> pathFromSelf
+          (for (freeP <- freePathsInFields; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, freeP)) yield {
+            freeP -> pathFromSelf
           }).toMap
         val substFieldsToTypes = rawFieldsToTypes.map((fld, tpe) => (fld, substitute(tpe)(using substMap)))
         val filteredCapSet = rawCapSet -- substMap.keys
