@@ -1,16 +1,17 @@
 
 let u = () in
 let r = region in
-let s = region in
+let s = r.ref u in
 let bs = box s in
 let x = r.ref bs in
 let f =
     fn (u: Unit)
         let r = region in
-        let br = box r in
-            x := br
+        let rf = r.ref u in
+        let brf = box rf in
+            x := brf
 in
     let _ = f u in
     let bv = !x in
-    let v = {cap} unbox bv in
-        v
+    let v = {r} unbox bv in
+        ()
