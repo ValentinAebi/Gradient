@@ -10,7 +10,6 @@ private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 private[typechecking] case class Ctx(
                                       store: Store,
                                       pathEquivalences: Seq[(Path, Path)],
-                                      selectEquivalences: Seq[(Path, RecordField, Path)],
                                       reporter: Reporter
                                     ) {
 
@@ -23,7 +22,7 @@ private[typechecking] case class Ctx(
     copy(pathEquivalences = pathEquivalences :+ (p, q))
 
   def withNewSelectEquivalence(owner: Path, fld: RecordField, value: Path): Ctx =
-    copy(selectEquivalences = selectEquivalences :+ (owner, fld, value))
+    withNewPathEquivalence(SelectPath(owner, fld), value)
 
   def varLookup(varId: VarId): Option[Type] = store.get(varId).flatten
 
@@ -56,9 +55,6 @@ private[typechecking] case class Ctx(
     val pec = PathsEquivalenceComputer.empty
     for ((p, q) <- pathEquivalences) {
       pec.assertEquivalent(p, q)
-    }
-    for ((owner, fld, value) <- selectEquivalences) {
-      pec.assertSelectEquiv(owner, fld, value)
     }
     pec
   }

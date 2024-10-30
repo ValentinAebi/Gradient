@@ -20,7 +20,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   override val acceptsFaultyInput: Boolean = false
 
   override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTerm[T.TermTree] =
-    typeTerm(in)(using Ctx(Map.empty, Seq.empty, Seq.empty, reporter))
+    typeTerm(in)(using Ctx(Map.empty, Seq.empty, reporter))
 
   private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTerm[T.TermTree] = t match {
     case p: U.PathTree => typePath(p)

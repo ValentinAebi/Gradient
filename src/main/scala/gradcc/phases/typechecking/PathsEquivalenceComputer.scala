@@ -23,9 +23,6 @@ final class PathsEquivalenceComputer private(
     unify(pNode, qNode)
   }
 
-  def assertSelectEquiv(owner: Path, select: RecordField, value: Path): Unit =
-    assertEquivalent(SelectPath(owner, select), value)
-
   def getEquivClass(id: UniqueVarId): Set[UniqueVarId] = {
     val targetNode = nodes(findOrCreateNodeAndParents(VarPath(id)))
     vars.filter((_, nid) => nodes(nid) == targetNode).keySet.toSet
