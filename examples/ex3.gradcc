@@ -1,7 +1,7 @@
 
 let f =
-    let g: (r: Reg^) -> (u: Unit) ->{r} Reg^{cap} =
-        fn (r: Reg^{cap})(u: Unit) r in
+    let g: (r: Reg^) -> (u: Unit) ->{r} Reg^ =
+        fn (r: Reg^)(u: Unit) r in
             let s = region in
                 g s
 in
