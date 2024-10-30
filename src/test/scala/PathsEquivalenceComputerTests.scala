@@ -1,5 +1,5 @@
 import gradcc.asts.UniqueVarId
-import gradcc.lang.{NamedField, Path, SelectPath, VarPath}
+import gradcc.lang.{NamedField, ProperPath, SelectPath, VarPath}
 import gradcc.phases.typechecking.PathsEquivalenceComputer
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -11,7 +11,7 @@ class PathsEquivalenceComputerTests {
 
     def v(s: String) = VarPath(UniqueVarId(s, 0))
 
-    extension(p: Path) infix def dot(f: String) = SelectPath(p, NamedField(f))
+    extension(p: ProperPath) infix def dot(f: String) = SelectPath(p, NamedField(f))
 
     val x = v("x")
     val y = v("y")

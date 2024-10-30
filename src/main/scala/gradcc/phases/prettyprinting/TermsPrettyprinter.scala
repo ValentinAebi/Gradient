@@ -24,6 +24,9 @@ def TermsPrettyprinter(
         ppRecTerm(root)
         add(".")
         ppField(field)
+      case p.BrandedPathTree(properPath, position) =>
+        add("#")
+        ppTerm(properPath)
       case p.BoxTree(boxed, position) =>
         add(BoxKw).add(" ")
         ppRecTerm(boxed)
@@ -86,6 +89,18 @@ def TermsPrettyprinter(
         ppRecTerm(regionCap)
         add(") ")
         addFieldsList(fields)
+      case p.EnclosureTree(permissions, body, position) =>
+        add(EnclKw).add("[")
+        ppCapt(permissions)
+        add("]")
+        ppRecTerm(body)
+      case p.ObscurTree(obscured, varId, body, position) =>
+        add(ObscurKw).add(" ")
+        ppRecTerm(obscured)
+        add(" ").add(AsKw).add(" ")
+        ppTerm(varId)
+        add(" ").add(InKw).add(" ")
+        ppRecTerm(body)
     }
   }
 
@@ -97,7 +112,7 @@ def TermsPrettyprinter(
   def ppType(tpe: p.TypeTree): Unit = {
     val p.TypeTree(shape, capt, position) = tpe
 
-    def addCaptIfAny() = capt.foreach { cp =>
+    def addCaptIfAny(): Unit = capt.foreach { cp =>
       add("^")
       ppCapt(cp)
     }
@@ -144,13 +159,15 @@ def TermsPrettyprinter(
     }
   }
 
-  def ppCapt(cSet: p.CaptureSetTree): Unit = cSet match {
+  def ppCapt(cSet: p.CaptureDescriptorTree): Unit = cSet match {
     case p.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       add("{")
       sepList(capturedVarsInOrder, ", ")(ppRecTerm)
       add("}")
     case p.RootCaptureSetTree(position) =>
       add("{").add(CapKw).add("}")
+    case p.BrandDescriptorTree(position) =>
+      add("#")
   }
 
   def ppField(field: p.FieldTree): Unit = field match {
@@ -173,7 +190,7 @@ def TermsPrettyprinter(
     }
   }
 
-  def addFieldsList(fields: Seq[(p.FieldTree, p.R[p.PathTree])]): Unit = {
+  def addFieldsList(fields: Seq[(p.FieldTree, p.R[p.StablePathTree])]): Unit = {
     val multiline = considerTypes && fields.size > 1
     add("{")
     if (multiline) {

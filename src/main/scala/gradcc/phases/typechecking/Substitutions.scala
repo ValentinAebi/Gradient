@@ -4,12 +4,12 @@ import gradcc.asts.UniqueVarId
 import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.*
 
-def substitute(tpe: Type)(using subst: Map[Capturable, Path]): Type = {
+def substitute(tpe: Type)(using subst: Map[Capturable, ProperPath]): Type = {
   val Type(shape, captureSet) = tpe
   Type(substitute(shape), captureSet.map(substitute))
 }
 
-def substitute(shape: Shape)(using subst: Map[Capturable, Path]): Shape = shape match {
+def substitute(shape: Shape)(using subst: Map[Capturable, ProperPath]): Shape = shape match {
   case TopShape =>
     TopShape
   case AbsShape(varId, varType, resType) =>
@@ -26,19 +26,19 @@ def substitute(shape: Shape)(using subst: Map[Capturable, Path]): Shape = shape 
     substitute(recordShape)
 }
 
-def substitute(recordShape: RecordShape)(using subst: Map[Capturable, Path]): RecordShape = {
+def substitute(recordShape: RecordShape)(using subst: Map[Capturable, ProperPath]): RecordShape = {
   val RecordShape(selfRef, fields) = recordShape
   RecordShape(selfRef, fields.map((fld, tpe) => (fld, substitute(tpe))))
 }
 
-def substitute(capturable: Capturable)(using subst: Map[Capturable, Path]): Capturable = {
+def substitute(capturable: Capturable)(using subst: Map[Capturable, ProperPath]): Capturable = {
   subst.getOrElse(capturable, capturable match {
-    case path: Path => substitute(path)
+    case path: ProperPath => substitute(path)
     case RootCapability => RootCapability
   })
 }
 
-def substitute(capabilityPath: Path)(using subst: Map[Capturable, Path]): Path = {
+def substitute(capabilityPath: ProperPath)(using subst: Map[Capturable, ProperPath]): ProperPath = {
   subst.getOrElse(capabilityPath, {
     capabilityPath match {
       case capVar: VarPath => capVar

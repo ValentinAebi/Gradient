@@ -51,7 +51,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         val selfRef = varCreator.nextVar(Keyword.SelfKw.str)
         val selfAwareCtx = ctxWithEquivalences(ctx, selfRef, recordLit)
         val selfRefPath = VarPath(selfRef)
-        val substMap: Map[Capturable, Path] =
+        val substMap: Map[Capturable, ProperPath] =
           (for (freeP <- freePathsInFields; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, freeP)) yield {
             freeP -> pathFromSelf
           }).toMap
@@ -76,7 +76,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         case (_, None) => None
         case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
           mustBeAssignable(varType, argType, arg.position, {
-            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkPath(arg))))
+            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkProperPath(arg))))
           })
         case (Some(callerType), _) =>
           ctx.reportError(s"$callerType is not callable", position)
@@ -153,7 +153,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val tpeOpt = (typedRegionCap.tpe, typedInitVal.tpe) match {
         case (Some(Type(RegionShape, _)), Some(Type(initValShape, initValCaptureSet))) =>
           if initValCaptureSet.isEmpty
-          then Some(RefShape(initValShape) ^ Set(U.mkPath(regionCap)))
+          then Some(RefShape(initValShape) ^ Set(U.mkProperPath(regionCap)))
           else ctx.reportError("reference value must have an empty capture set", position)
         case (Some(nonRegionType), _) =>
           ctx.reportError(s"expected a region, found $nonRegionType", position)
@@ -166,7 +166,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
         mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
       }
       val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
-      val regionCapPath = U.mkPath(regionCap)
+      val regionCapPath = U.mkProperPath(regionCap)
       val substFields = fields.map(
         (fld, p) =>
           val regPath = SelectPath(VarPath(selfRefVar), RegionField)
@@ -190,7 +190,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val fld = U.mkField(field)
       T.SelectTree(typedLhs, convertField(field), position).withType(
         typedLhs.tpe
-          .map(unpackIfRecursive(_, U.mkPath(lhs)))
+          .map(unpackIfRecursive(_, U.mkProperPath(lhs)))
           .flatMap {
             case Type(RecordShape(selfRef, fields), captureSet) if fields.contains(fld) =>
               Some(fields.apply(fld))
@@ -276,11 +276,11 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   private def ctxWithEquivalences(ctx: Ctx, varId: UniqueVarId, value: U.TermTree): Ctx = {
     value match {
       case pathTree: U.PathTree =>
-        ctx.withNewPathEquivalence(VarPath(varId), U.mkPath(pathTree))
+        ctx.withNewPathEquivalence(VarPath(varId), U.mkProperPath(pathTree))
       case recordLiteralTree: U.RecordLiteralTree =>
         val varPath = VarPath(varId)
         recordLiteralTree.fields.foldLeft(ctx) {
-          case (ctx, (fld, fldVal)) => ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkPath(fldVal))
+          case (ctx, (fld, fldVal)) => ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkProperPath(fldVal))
         }
       case _ => ctx
     }

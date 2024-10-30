@@ -1,13 +1,13 @@
 package gradcc.phases.typechecking
 
-import gradcc.lang.{AbsShape, BoxShape, Capturable, Path, RecordShape, RefShape, RegionShape, RootCapability, Shape, TopShape, Type, UnitShape}
+import gradcc.lang.{AbsShape, BoxShape, Capturable, ProperPath, RecordShape, RefShape, RegionShape, RootCapability, Shape, TopShape, Type, UnitShape}
 
-def freePaths(tpe: Type): Set[Path] = {
+def freePaths(tpe: Type): Set[ProperPath] = {
   val Type(shape, cs) = tpe
   freePaths(shape) ++ cs.flatMap(freePaths)
 }
 
-def freePaths(shape: Shape): Set[Path] = shape match {
+def freePaths(shape: Shape): Set[ProperPath] = shape match {
   case TopShape =>
     Set.empty
   case AbsShape(varId, varType, resType) =>
@@ -26,7 +26,7 @@ def freePaths(shape: Shape): Set[Path] = shape match {
       .toSet
 }
 
-def freePaths(capturable: Capturable): Set[Path] = capturable match {
-  case p: Path => Set(p)
+def freePaths(capturable: Capturable): Set[ProperPath] = capturable match {
+  case p: ProperPath => Set(p)
   case RootCapability => Set.empty
 }

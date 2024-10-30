@@ -29,13 +29,18 @@ trait UidTermsProvider extends TermsProvider {
 
   def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
     case NonRootCaptureSetTree(capturedVarsInOrder, position) =>
-      capturedVarsInOrder.map(capV => mkPath(getTerm(capV))).toSet
+      capturedVarsInOrder.map(capV => mkProperPath(getTerm(capV))).toSet
     case RootCaptureSetTree(position) => Set(RootCapability)
   }
 
-  def mkPath(capPath: PathTree): Path = capPath match {
+  def mkStablePath(stablePath: StablePathTree): StablePath = stablePath match {
+    case properPathTree: ProperPathTree => mkProperPath(properPathTree)
+    case BrandedPathTree(properPath, position) => BrandedPath(mkProperPath(properPath))
+  }
+
+  def mkProperPath(properPath: ProperPathTree): ProperPath = properPath match {
     case IdentifierTree(id, position) => VarPath(id)
-    case SelectTree(root, fld, position) => SelectPath(mkPath(getTerm(root)), mkField(fld))
+    case SelectTree(root, fld, position) => SelectPath(mkProperPath(getTerm(root)), mkField(fld))
   }
 
   def mkField(fld: FieldTree): RecordField = fld match {

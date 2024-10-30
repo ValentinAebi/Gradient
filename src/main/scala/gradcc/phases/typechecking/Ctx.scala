@@ -9,7 +9,7 @@ private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 
 private[typechecking] case class Ctx(
                                       store: Store,
-                                      pathEquivalences: Seq[(Path, Path)],
+                                      pathEquivalences: Seq[(ProperPath, ProperPath)],
                                       reporter: Reporter
                                     ) {
 
@@ -18,15 +18,15 @@ private[typechecking] case class Ctx(
   def withNewBinding(varId: UniqueVarId, varType: Option[Type]): Ctx =
     copy(store = store + (varId -> varType))
 
-  def withNewPathEquivalence(p: Path, q: Path): Ctx =
+  def withNewPathEquivalence(p: ProperPath, q: ProperPath): Ctx =
     copy(pathEquivalences = pathEquivalences :+ (p, q))
 
-  def withNewSelectEquivalence(owner: Path, fld: RecordField, value: Path): Ctx =
+  def withNewSelectEquivalence(owner: ProperPath, fld: RecordField, value: ProperPath): Ctx =
     withNewPathEquivalence(SelectPath(owner, fld), value)
 
   def varLookup(varId: VarId): Option[Type] = store.get(varId).flatten
 
-  def pathLookup(capabilityPath: Path): Option[Type] = capabilityPath match {
+  def pathLookup(capabilityPath: ProperPath): Option[Type] = capabilityPath match {
     case VarPath(root) => varLookup(root)
     case SelectPath(lhs, select) =>
       pathLookup(lhs)
@@ -38,7 +38,7 @@ private[typechecking] case class Ctx(
         }
   }
 
-  def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
+  def expressAsPathFrom(origin: ProperPath, target: ProperPath): Option[ProperPath] = {
     createPathsEquivalenceComputer().expressAsPathFrom(origin, target)
   }
 

@@ -39,13 +39,20 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
       case _ => reporter.fatal(msg, tokens.headPos)
     }
 
-    def parsePath(tokens: Tokens, errorMsg: => String): (PathTree, Tokens) = tokens match {
+    def parseProperPath(tokens: Tokens, errorMsg: => String): (ProperPathTree, Tokens) = tokens match {
       case LowerWordToken(rootId, pos) :: rem => parsePathFollow(rem, IdentifierTree(rootId, pos))
       case _ => reporter.fatal(errorMsg, tokens.headPos)
     }
 
+    def parseStablePath(tokens: Tokens, errorMsg: => String): (StablePathTree, Tokens) = tokens match {
+      case OperatorToken(Brand, brandPos) :: rem1 =>
+        val (properPath, rem2) = parseProperPath(rem1, "expected a path after brand symbol")
+        (BrandedPathTree(properPath, brandPos), rem2)
+      case rem => parseProperPath(rem, errorMsg)
+    }
+
     @tailrec
-    def parsePathFollow(tokens: Tokens, acc: PathTree): (PathTree, Tokens) = tokens match {
+    def parsePathFollow(tokens: Tokens, acc: ProperPathTree): (ProperPathTree, Tokens) = tokens match {
       case OperatorToken(Dot, dotPos) :: LowerWordToken(fld, fldPos) :: rem =>
         parsePathFollow(rem, SelectTree(acc, NamedFieldTree(fld, fldPos), dotPos))
       case OperatorToken(Dot, dotPos) :: KeywordToken(RegKw, fldPos) :: rem =>
@@ -53,23 +60,23 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
       case _ => (acc, tokens)
     }
 
-    def parseAssignFollow(tokens: Tokens, lhs: PathTree): (AssignTree, Tokens) = tokens match {
+    def parseAssignFollow(tokens: Tokens, lhs: StablePathTree): (AssignTree, Tokens) = tokens match {
       case OperatorToken(ColumnEqual, pos) :: rem1 =>
-        val (rhs, rem2) = parsePath(rem1, s"expected a path after $ColumnEqual")
+        val (rhs, rem2) = parseStablePath(rem1, s"expected a path after $ColumnEqual")
         (AssignTree(lhs, rhs, pos), rem2)
       case _ => reporter.fatal("expected ':='", tokens.headPos)
     }
 
-    def parseDotRefFollow(tokens: Tokens, lhs: PathTree): (RefTree, Tokens) = tokens match {
+    def parseDotRefFollow(tokens: Tokens, lhs: StablePathTree): (RefTree, Tokens) = tokens match {
       case OperatorToken(Dot, dotPos) :: KeywordToken(RefKw, _) :: rem1 =>
-        val (rhs, rem2) = parsePath(rem1, s"expected a path after $RefKw")
+        val (rhs, rem2) = parseStablePath(rem1, s"expected a path after $RefKw")
         (RefTree(lhs, rhs, dotPos), rem2)
       case _ => reporter.fatal(s"expected '.$RefKw'", tokens.headPos)
     }
 
     def parseValueOpt(tokens: Tokens): Option[(ValueTree, Tokens)] = tokens match {
       case KeywordToken(BoxKw, pos) :: rem1 => Some {
-        val (p, rem2) = parsePath(rem1, s"expected a path after $BoxKw")
+        val (p, rem2) = parseStablePath(rem1, s"expected a path after $BoxKw")
         (BoxTree(p, pos), rem2)
       }
       case KeywordToken(FnKw, fnPos) :: rem1 => Some {
@@ -98,9 +105,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
       }
     }
 
-    def parseCommaSeparatedFieldValuePairs(tokens: Tokens): (List[(FieldTree, PathTree)], Tokens) = tokens match {
+    def parseCommaSeparatedFieldValuePairs(tokens: Tokens): (List[(FieldTree, StablePathTree)], Tokens) = tokens match {
       case LowerWordToken(fld, fldPos) :: OperatorToken(Equal, _) :: rem1 =>
-        val r2@(p, rem2) = parsePath(rem1, s"expected a path after $Equal")
+        val r2@(p, rem2) = parseStablePath(rem1, s"expected a path after $Equal")
         val head = (NamedFieldTree(fld, fldPos), p)
         rem2 match {
           case OperatorToken(Comma, _) :: rem3 =>
@@ -124,12 +131,12 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
       case _ => (Nil, tokens)
     }
 
-    def parseCommaSeparatedPaths(tokens: Tokens): (List[PathTree], Tokens) = tokens match {
+    def parseCommaSeparatedProperPaths(tokens: Tokens): (List[ProperPathTree], Tokens) = tokens match {
       case LowerWordToken(_, _) :: _ =>
-        val (head, rem1) = parsePath(tokens, assert(false))
+        val (head, rem1) = parseProperPath(tokens, assert(false))
         rem1 match {
           case OperatorToken(Comma, _) :: rem2 =>
-            val (tail, rem3) = parseCommaSeparatedPaths(rem2)
+            val (tail, rem3) = parseCommaSeparatedProperPaths(rem2)
             (head :: tail, rem3)
           case _ => (List(head), rem1)
         }
@@ -164,9 +171,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
 
       // cases starting with a path
       case _ if startsWithLowerWord(tokens) =>
-        val res1@(p1, rem1) = parsePath(tokens, assert(false))
+        val res1@(p1, rem1) = parseStablePath(tokens, assert(false))
         if (startsWithLowerWord(rem1)) {
-          val (p2, rem2) = parsePath(rem1, assert(false))
+          val (p2, rem2) = parseStablePath(rem1, assert(false))
           (AppTree(p1, p2, p1.position), rem2)
         } else if (startsWithOperator(ColumnEqual, rem1)) {
           parseAssignFollow(rem1, p1)
@@ -197,7 +204,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
 
       // dereference
       case OperatorToken(Bang, pos) :: rem1 =>
-        val (p, rem2) = parsePath(rem1, s"expected a path after $Bang")
+        val (p, rem2) = parseStablePath(rem1, s"expected a path after $Bang")
         (DerefTree(p, pos), rem2)
 
       // module
@@ -206,7 +213,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
 
         rem1 match {
           case OperatorToken(OpenParenth, _) :: rem2 =>
-            val (region, rem3) = parsePath(rem2, "expected a path as module region")
+            val (region, rem3) = parseStablePath(rem2, "expected a path as module region")
             rem3 match {
               case OperatorToken(CloseParenth, _) :: OperatorToken(OpenBrace, _) :: rem4 =>
                 val (fields, rem5) = parseCommaSeparatedFieldValuePairs(rem4)
@@ -239,11 +246,11 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
 
       // unbox
       case OperatorToken(OpenBrace, openBracePos) :: (rem1@(LowerWordToken(_, _) :: _)) => {
-        val (capturedPaths, rem2) = parseCommaSeparatedPaths(rem1)
+        val (capturedPaths, rem2) = parseCommaSeparatedProperPaths(rem1)
         val captureSetTree = NonRootCaptureSetTree(capturedPaths, openBracePos)
         rem2 match {
           case OperatorToken(CloseBrace, _) :: KeywordToken(UnboxKw, unboxPos) :: rem3 =>
-            val (p, rem4) = parsePath(rem3, s"expected a path after $UnboxKw")
+            val (p, rem4) = parseProperPath(rem3, s"expected a path after $UnboxKw")
             (UnboxTree(captureSetTree, p, unboxPos), rem4)
           case _ => reporter.fatal("malformed unbox term", rem2.headPos)
         }
@@ -260,12 +267,31 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
         expectOperator(CloseParenth, rem2, "missing closing parenthesis")(term)
 
       case KeywordToken(BoxKw, pos) :: rem1 =>
-        val (p, rem2) = parsePath(rem1, s"expected a path after $BoxKw")
+        val (p, rem2) = parseStablePath(rem1, s"expected a path after $BoxKw")
         (BoxTree(p, pos), rem2)
 
       case KeywordToken(FnKw, fnPos) :: rem1 =>
         val (abs, rem2) = parseFnFollow(rem1, true, parseTerm)
         (abs.asInstanceOf[AbsTree], rem2)
+
+      case KeywordToken(EnclKw, enclPos) :: OperatorToken(OpenSquareBracket, _) :: OperatorToken(OpenBrace, openBrPos) :: rem1 =>
+        val (permissionsVars, rem2) = parseCommaSeparatedProperPaths(rem1)
+        rem2 match {
+          case OperatorToken(CloseBrace, _) :: OperatorToken(CloseSquareBracket, _) :: rem3 =>
+            val (body, rem4) = parseTerm(rem3)
+            (EnclosureTree(NonRootCaptureSetTree(permissionsVars, openBrPos), body, enclPos), rem4)
+          case _ =>
+            reporter.fatal("expected end of enclosure term", rem2.headPos)
+        }
+
+      case KeywordToken(ObscurKw, obscurPos) :: rem1 =>
+        val (obscuredP, rem2) = parseStablePath(rem1, s"expected path after $ObscurKw")
+        rem2 match {
+          case KeywordToken(AsKw, _) :: LowerWordToken(varId, varPos) :: KeywordToken(InKw, _) :: rem3 =>
+            val (body, rem4) = parseTerm(rem3)
+            (ObscurTree(obscuredP, IdentifierTree(varId, varPos), body, obscurPos), rem4)
+          case _ => reporter.fatal("malformed obscur form: expected 'obscur <path> as <id> in <term>'", rem2.headPos)
+        }
 
       case _ => reporter.fatal("expected a term", tokens.headPos)
     }
@@ -281,7 +307,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
     def parseShapeOrType(tokens: Tokens): (ShapeTree | TypeTree, Tokens) = {
       parseVarColonTypeBetweenParenthesesOpt(tokens) match {
         case (Some((varId, varType)), OperatorToken(Arrow, _) :: OperatorToken(OpenBrace, openBrPos) :: rem1) =>
-          val (paths, rem2) = parseCommaSeparatedPaths(rem1)
+          val (paths, rem2) = parseCommaSeparatedProperPaths(rem1)
           rem2 match {
             case OperatorToken(CloseBrace, _) :: rem3 =>
               val (resType, rem4) = parseType(rem3)
@@ -335,7 +361,7 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
 
     def maybeWithCaptureSet(shape: ShapeTree, tokens: Tokens): (ShapeTree | TypeTree, Tokens) = tokens match {
       case OperatorToken(Hat, hatPos) :: OperatorToken(OpenBrace, _) :: rem1 =>
-        val (paths, rem2) = parseCommaSeparatedPaths(rem1)
+        val (paths, rem2) = parseCommaSeparatedProperPaths(rem1)
         expectOperator(CloseBrace, rem2, "unclosed capture set") {
           TypeTree(shape, Some(NonRootCaptureSetTree(paths, hatPos)), shape.position)
         }

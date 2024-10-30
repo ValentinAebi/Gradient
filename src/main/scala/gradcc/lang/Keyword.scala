@@ -1,12 +1,15 @@
 package gradcc.lang
 
 enum Keyword(val str: String) {
+  case AsKw extends Keyword("as")
   case BoxKw extends Keyword("box")
   case CapKw extends Keyword("cap")
+  case EnclKw extends Keyword("encl")
   case FnKw extends Keyword("fn")
   case InKw extends Keyword("in")
   case LetKw extends Keyword("let")
   case ModKw extends Keyword("mod")
+  case ObscurKw extends Keyword("obscur")
   case RefKw extends Keyword("ref")
   case RegKw extends Keyword("reg")
   case RegionKw extends Keyword("region")

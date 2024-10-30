@@ -1,7 +1,7 @@
 package gradcc.phases.typechecking
 
 import gradcc.asts.UniqueVarId
-import gradcc.lang.{Path, RecordField, SelectPath, VarPath}
+import gradcc.lang.{ProperPath, RecordField, SelectPath, VarPath}
 import gradcc.phases.typechecking.PathsEquivalenceComputer.*
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,7 +17,7 @@ final class PathsEquivalenceComputer private(
   def deepCopy: PathsEquivalenceComputer =
     PathsEquivalenceComputer(this.vars.map(identity), this.nodes.map((nid, n) => (nid, n.deepCopy)))
 
-  def assertEquivalent(p: Path, q: Path): Unit = {
+  def assertEquivalent(p: ProperPath, q: ProperPath): Unit = {
     val pNode = nodes(findOrCreateNodeAndParents(p))
     val qNode = nodes(findOrCreateNodeAndParents(q))
     unify(pNode, qNode)
@@ -28,16 +28,16 @@ final class PathsEquivalenceComputer private(
     vars.filter((_, nid) => nodes(nid) == targetNode).keySet.toSet
   }
 
-  def expressAsPathFrom(origin: Path, target: Path): Option[Path] = {
+  def expressAsPathFrom(origin: ProperPath, target: ProperPath): Option[ProperPath] = {
 
     val originId = findOrCreateNodeAndParents(origin)
     val targetId = findOrCreateNodeAndParents(target)
     val targetNode = nodes(targetId)
 
-    val searchQueue = mutable.Queue.empty[(NodeId, Path)]
+    val searchQueue = mutable.Queue.empty[(NodeId, ProperPath)]
     val alreadyEnqueued = MutSet.empty[NodeId]
 
-    def enq(nodeId: NodeId, p: Path): Unit = {
+    def enq(nodeId: NodeId, p: ProperPath): Unit = {
       searchQueue.addOne((nodeId, p))
       alreadyEnqueued.addOne(nodeId)
     }
@@ -78,7 +78,7 @@ final class PathsEquivalenceComputer private(
     }
   }
 
-  private def findOrCreateNodeAndParents(p: Path): NodeId = p match {
+  private def findOrCreateNodeAndParents(p: ProperPath): NodeId = p match {
     case VarPath(root) =>
       vars.getOrElse(root, {
         val nodeId = nextId()

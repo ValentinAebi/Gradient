@@ -19,19 +19,22 @@ sealed trait Capturable {
   def isRootedIn(varId: UniqueVarId): Boolean
 }
 
-sealed trait Path extends Capturable
+sealed trait StablePath
+sealed trait ProperPath extends StablePath, Capturable
 
-case class VarPath(root: UniqueVarId) extends Path {
+case class VarPath(root: UniqueVarId) extends ProperPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = (varId == root)
 
   override def toString: String = root.toString
 }
 
-case class SelectPath(lhs: Path, field: RecordField) extends Path {
+case class SelectPath(lhs: ProperPath, field: RecordField) extends ProperPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
 
   override def toString: String = s"$lhs.$field"
 }
+
+case class BrandedPath(p: ProperPath) extends StablePath
 
 case object RootCapability extends Capturable {
   override def isRootedIn(varId: UniqueVarId): Boolean = false

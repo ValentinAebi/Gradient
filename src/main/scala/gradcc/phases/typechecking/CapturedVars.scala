@@ -4,7 +4,7 @@ import gradcc.asts.UniquelyNamedTerms.*
 import gradcc.lang.{Capturable, RootCapability}
 
 def cv(term: TermTree): Set[Capturable] = term match {
-  case p: PathTree => Set(mkPath(p))
+  case p: PathTree => Set(mkProperPath(p))
   case CapTree(position) => Set(RootCapability)
   case BoxTree(boxed, position) => Set.empty
   case AbsTree(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
@@ -46,7 +46,7 @@ def cv(shapeTree: ShapeTree): Set[Capturable] = shapeTree match {
 
 def cv(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
   case NonRootCaptureSetTree(capturedVarsInOrder, position) =>
-    capturedVarsInOrder.map(capV => mkPath(capV)).toSet
+    capturedVarsInOrder.map(capV => mkProperPath(capV)).toSet
   case RootCaptureSetTree(position) =>
     Set.empty
 }
