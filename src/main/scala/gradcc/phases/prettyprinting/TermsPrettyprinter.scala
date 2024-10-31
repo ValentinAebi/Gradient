@@ -226,6 +226,7 @@ def TermsPrettyprinter(
   }
 
   ppRecTerm(term)
+  addIfConsiderTypes(typeAnnot(p.getType(term)))
   isb.toString
 }
 
