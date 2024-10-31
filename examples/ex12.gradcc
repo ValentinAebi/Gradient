@@ -1,0 +1,4 @@
+
+let u = () in
+let x = #u in
+    encl[{}][Unit] #u

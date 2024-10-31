@@ -7,11 +7,12 @@ import gradcc.reporting.{Position, Reporter}
 
 private[typechecking] type Store = Map[UniqueVarId, Option[Type]]
 
-private[typechecking] case class Ctx(
-                                      store: Store,
-                                      pathEquivalences: Seq[(ProperPath, ProperPath)],
-                                      reporter: Reporter
-                                    ) {
+private[typechecking] case class Ctx private(
+                                              store: Store,
+                                              pathEquivalences: Seq[(ProperPath, ProperPath)],
+                                              insideEnclosure: Boolean,
+                                              reporter: Reporter
+                                            ) {
 
   // TODO optimize (more replications of this object than needed)
 
@@ -23,6 +24,8 @@ private[typechecking] case class Ctx(
 
   def withNewSelectEquivalence(owner: ProperPath, fld: RecordField, value: ProperPath): Ctx =
     withNewPathEquivalence(SelectPath(owner, fld), value)
+
+  def withEnclosureFlag: Ctx = copy(insideEnclosure = true)
 
   def varLookup(varId: VarId): Option[Type] = store.get(varId).flatten
 
@@ -36,6 +39,18 @@ private[typechecking] case class Ctx(
             fields.get(select)
           case _ => None
         }
+  }
+
+  def enclosureFound(pos: Position): Unit = {
+    if (insideEnclosure) {
+      reporter.error("nested enclosure", pos)
+    }
+  }
+
+  def gradualityUsed(pos: Position): Unit = {
+    if (!insideEnclosure) {
+      reporter.error("illegal use of graduality outside of enclosures", pos)
+    }
   }
 
   def expressAsPathFrom(origin: ProperPath, target: ProperPath): Option[ProperPath] = {
@@ -58,5 +73,11 @@ private[typechecking] case class Ctx(
     }
     pec
   }
-  
+
+}
+
+object Ctx {
+
+  def apply(reporter: Reporter): Ctx = Ctx(Map.empty, Seq.empty, false, reporter)
+
 }

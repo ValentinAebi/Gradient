@@ -19,7 +19,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
   override val acceptsFaultyInput: Boolean = false
 
   override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTermTree[T.TermTree] =
-    typeTerm(in)(using Ctx(Map.empty, Seq.empty, reporter))
+    typeTerm(in)(using Ctx(reporter))
 
   private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTermTree[T.TermTree] = t match {
     case p: U.StablePathTree => typeStablePath(p)
@@ -85,6 +85,9 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       T.AppTree(typedCallee, typedArg, position).withType(tpeOpt)
     }
     case U.UnboxTree(captureDescr, boxed, position) => {
+      if (captureDescr.isInstanceOf[U.BrandDescriptorTree]){
+        ctx.gradualityUsed(position)
+      }
       val typedCapDescr = typeCaptureDescr(captureDescr)
       val typedBoxed = typeStablePath(boxed)
       val unboxCapSet = T.mkCaptureDescr(typedCapDescr)
@@ -186,9 +189,10 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       T.ModuleTree(typedRegionCap, substFields, position).withType(tpeOpt)
     }
     case U.EnclosureTree(permissions, explicitTypeTree, body, position) => {
+      ctx.enclosureFound(position)
       val typedPermissions = typeCaptureSet(permissions)
       val typedExplicitType = typeTypeTree(explicitTypeTree)
-      val typedBody = typeTerm(body)
+      val typedBody = typeTerm(body)(using ctx.withEnclosureFlag)
       val explicitType = U.mkType(explicitTypeTree)
       typedBody.tpe.foreach { bodyType =>
         mustBeAssignable(explicitType, bodyType, position, {
@@ -198,6 +202,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       T.EnclosureTree(typedPermissions, typedExplicitType, typedBody, position).withType(explicitType)
     }
     case U.ObscurTree(obscured, varId, body, position) => {
+      ctx.gradualityUsed(position)
       val typedObscured = typeStablePath(obscured)
       val convertedVarId = convertIdent(varId)
       val obscuredTypeCapturingRoot = typedObscured.tpe.map(_.copy(captureDescr = CaptureSet(RootCapability)))
@@ -210,6 +215,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
   private def typeStablePath(p: U.StablePathTree)(using ctx: Ctx): TypedTermTree[T.StablePathTree] = p match {
     case properPathTree: U.ProperPathTree => typeProperPath(properPathTree)
     case U.BrandedPathTree(properPath, position) =>
+      ctx.gradualityUsed(p.position)
       val typedProperPath = typeProperPath(properPath)
       T.BrandedPathTree(typedProperPath, position).withType(
         typedProperPath.tpe.map(_.copy(captureDescr = Brand))
