@@ -2,17 +2,40 @@ package gradcc.lang
 
 import gradcc.asts.UniqueVarId
 
-case class Type(shape: Shape, captureSet: Set[Capturable]) {
+case class Type(shape: Shape, captureDescr: CaptureDescriptor) {
   override def toString: String = {
     shape match {
-      case absShape: AbsShape => absShape.toStringWith(captureSet)
+      case absShape: AbsShape => absShape.toStringWith(captureDescr)
       case _ =>
         val shapeStrRaw = shape.toString
         val shapeStr = if shapeStrRaw.contains(" ") then "(" + shapeStrRaw + ")" else shapeStrRaw
-        val capSetStr = if captureSet.isEmpty then "" else s"^{${captureSet.toSeq.sortBy(_.toString).mkString(",")}}"
-        shapeStr + capSetStr
+        shapeStr + captureDescr.toHatNotation
     }
   }
+}
+
+sealed trait CaptureDescriptor {
+  def prettified: String
+  final def toHatNotation: String = "^" ++ prettified
+}
+
+case class CaptureSet(captured: Set[Capturable]) extends CaptureDescriptor {
+  override def prettified: String = {
+    if captured.isEmpty then ""
+    else captured.mkString("{", ",", "}")
+  }
+
+  override def toString: String = captured.mkString("{", ",", "}")
+}
+
+object CaptureSet {
+  def apply(capt: Capturable*): CaptureSet = CaptureSet(capt.toSet)
+  def empty: CaptureSet = CaptureSet(Set.empty)
+}
+
+case object Brand extends CaptureDescriptor {
+  override def prettified: String = "#"
+  override def toString: String = "#"
 }
 
 sealed trait Capturable {
@@ -20,6 +43,7 @@ sealed trait Capturable {
 }
 
 sealed trait StablePath
+
 sealed trait ProperPath extends StablePath, Capturable
 
 case class VarPath(root: UniqueVarId) extends ProperPath {
@@ -43,7 +67,7 @@ case object RootCapability extends Capturable {
 }
 
 sealed trait Shape {
-  infix def ^(captureSet: Set[Capturable]): Type = Type(this, captureSet)
+  infix def ^(captureDescriptor: CaptureDescriptor): Type = Type(this, captureDescriptor)
 }
 
 case object TopShape extends Shape {
@@ -52,10 +76,10 @@ case object TopShape extends Shape {
 
 case class AbsShape(varId: UniqueVarId, varType: Type, resType: Type) extends Shape {
 
-  def toStringWith(capSet: Set[Capturable]): String =
-    s"($varId: $varType) ->{${capSet.mkString(",")}} $resType"
+  def toStringWith(capDescr: CaptureDescriptor): String =
+    s"($varId: $varType) ->${capDescr.prettified} $resType"
 
-  override def toString: String = toStringWith(Set.empty)
+  override def toString: String = s"($varId: $varType) -> $resType"
 }
 
 case class BoxShape(boxed: Type) extends Shape {

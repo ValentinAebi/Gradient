@@ -10,7 +10,7 @@ trait UidTermsProvider extends TermsProvider {
 
   def mkType(typeTree: TypeTree): Type = Type(
     mkShape(typeTree.shape),
-    typeTree.captureSet.map(mkCaptureSet).getOrElse(Set.empty)
+    typeTree.captureSet.map(mkCaptureSet).getOrElse(CaptureSet.empty)
   )
 
   def mkShape(typeShapeTree: ShapeTree): Shape = typeShapeTree match {
@@ -27,11 +27,16 @@ trait UidTermsProvider extends TermsProvider {
     )
   }
 
-  def mkCaptureSet(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
+  def mkCaptureDescr(captureDescriptorTree: CaptureDescriptorTree): CaptureDescriptor = captureDescriptorTree match {
+    case cs: CaptureSetTree => mkCaptureSet(cs)
+    case BrandDescriptorTree(position) => Brand
+  }
+
+  def mkCaptureSet(captureSetTree: CaptureSetTree): CaptureSet = CaptureSet(captureSetTree match {
     case NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       capturedVarsInOrder.map(capV => mkProperPath(getTerm(capV))).toSet
     case RootCaptureSetTree(position) => Set(RootCapability)
-  }
+  })
 
   def mkStablePath(stablePath: StablePathTree): StablePath = stablePath match {
     case properPathTree: ProperPathTree => mkProperPath(properPathTree)
@@ -47,5 +52,5 @@ trait UidTermsProvider extends TermsProvider {
     case NamedFieldTree(fieldName, position) => NamedField(fieldName)
     case RegFieldTree(position) => RegionField
   }
-  
+
 }

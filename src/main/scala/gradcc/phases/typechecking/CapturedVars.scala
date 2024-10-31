@@ -1,52 +1,73 @@
 package gradcc.phases.typechecking
 
 import gradcc.asts.UniquelyNamedTerms.*
-import gradcc.lang.{Capturable, RootCapability}
+import gradcc.lang.*
 
-def cv(term: TermTree): Set[Capturable] = term match {
-  case p: PathTree => Set(mkProperPath(p))
-  case CapTree(position) => Set(RootCapability)
-  case BoxTree(boxed, position) => Set.empty
-  case AbsTree(varId, tpe, body, position) => cv(body).filterNot(_.isRootedIn(varId.id))
-  case RecordLiteralTree(fields, position) => fields.flatMap((_, p) => cv(p)).toSet
-  case UnitLiteralTree(position) => Set.empty
+def cv(term: TermTree): CaptureDescriptor = term match {
+  case p: ProperPathTree => CaptureSet(mkProperPath(p))
+  case BrandedPathTree(properPath, position) => Brand
+  case CapTree(position) => CaptureSet(RootCapability)
+  case BoxTree(boxed, position) => CaptureSet.empty
+  case AbsTree(varId, tpe, body, position) =>
+    cv(body).withoutPathsRootedIn(varId.id)
+  case RecordLiteralTree(fields, position) =>
+    cvsFrom(fields, (fld, tpe) => cv(tpe))
+  case UnitLiteralTree(position) => CaptureSet.empty
   case AppTree(callee, arg, position) => cv(callee) ++ cv(arg)
-  case UnboxTree(captureSet, boxed, position) => mkCaptureSet(captureSet) ++ cv(boxed)
+  case UnboxTree(captureDescr, boxed, position) => mkCaptureDescr(captureDescr) ++ cv(boxed)
   case let@LetTree(varId, value, typeAnnot, body, position) => {
     val capturedByBody = cv(body)
-    if capturedByBody.exists(_.isRootedIn(varId.id))
-    then cv(value) ++ typeAnnot.toSeq.flatMap(cv) ++ cv(body).filterNot(_.isRootedIn(varId.id))
+    if capturedByBody.containsPathWithRoot(varId.id)
+    then cv(value) ++ cvsFrom(typeAnnot, cv) ++ cv(body).withoutPathsRootedIn(varId.id)
     else capturedByBody
   }
-  case RegionTree(position) => Set.empty
+  case RegionTree(position) => CaptureSet.empty
   case DerefTree(ref, position) => cv(ref)
   case AssignTree(ref, newVal, position) => cv(ref) ++ cv(newVal)
   case RefTree(regionCap, initVal, position) => cv(regionCap) ++ cv(initVal)
-  case ModuleTree(regionCap, fields, position) => cv(regionCap) ++ fields.flatMap((_, q) => cv(q))
+  case ModuleTree(regionCap, fields, position) =>
+    cv(regionCap) ++ cvsFrom(fields, (fld, t) => cv(t))
+  case EnclosureTree(permissions, tpe, body, position) =>
+    mkCaptureDescr(permissions) ++ cvsFrom(tpe.captureSet, mkCaptureSet)
 }
 
-def cv(typeTree: TypeTree): Set[Capturable] = {
+def cv(typeTree: TypeTree): CaptureDescriptor = {
   val TypeTree(shape, capSet, position) = typeTree
-  cv(shape) ++ capSet.toSeq.flatMap(cv)
+  cv(shape) ++ cvsFrom(capSet, mkCaptureDescr)
 }
 
-def cv(shapeTree: ShapeTree): Set[Capturable] = shapeTree match {
-  case TopShapeTree(position) => Set.empty
+def cv(shapeTree: ShapeTree): CaptureDescriptor = shapeTree match {
+  case TopShapeTree(position) => CaptureSet.empty
   case AbsShapeTree(varId, varType, resType, position) =>
-    cv(varType) ++ cv(resType).filterNot(_.isRootedIn(varId.id))
-  case BoxShapeTree(boxedType, position) => Set.empty
-  case UnitShapeTree(position) => Set.empty
+    cv(varType) ++ cv(resType).withoutPathsRootedIn(varId.id)
+  case BoxShapeTree(boxedType, position) => CaptureSet.empty
+  case UnitShapeTree(position) => CaptureSet.empty
   case RefShapeTree(referencedType, position) =>
     cv(referencedType)
-  case RegShapeTree(position) => Set.empty
+  case RegShapeTree(position) => CaptureSet.empty
   case RecordShapeTree(selfRef, fieldsInOrder, position) =>
-    val fieldsCap = fieldsInOrder.flatMap((_, tpe) => cv(tpe)).toSet
-    selfRef.map(selfRef => fieldsCap.filterNot(_.isRootedIn(selfRef.id))).getOrElse(fieldsCap)
+    val fieldsCap = cvsFrom(fieldsInOrder, (_, tpe) => cv(tpe))
+    selfRef.map(selfRef => fieldsCap.withoutPathsRootedIn(selfRef.id)).getOrElse(fieldsCap)
 }
 
-def cv(captureSetTree: CaptureSetTree): Set[Capturable] = captureSetTree match {
-  case NonRootCaptureSetTree(capturedVarsInOrder, position) =>
-    capturedVarsInOrder.map(capV => mkProperPath(capV)).toSet
-  case RootCaptureSetTree(position) =>
-    Set.empty
+private def cvsFrom[T](iterable: Iterable[T], extractor: T => CaptureDescriptor): CaptureDescriptor =
+  iterable.foldLeft[CaptureDescriptor](CaptureSet.empty)(_ ++ extractor(_))
+
+extension (l: CaptureDescriptor) {
+
+  private infix def ++(r: CaptureDescriptor): CaptureDescriptor = (l, r) match {
+    case (CaptureSet(ls), CaptureSet(rs)) => CaptureSet(ls ++ rs)
+    case _ => Brand
+  }
+
+  private def withoutPathsRootedIn(varId: VarId): CaptureDescriptor = l match {
+    case CaptureSet(captured) => CaptureSet(captured.filterNot(_.isRootedIn(varId)))
+    case Brand => Brand
+  }
+
+  private def containsPathWithRoot(varId: VarId): Boolean = l match {
+    case CaptureSet(paths) => paths.exists(_.isRootedIn(varId))
+    case _ => false
+  }
+
 }

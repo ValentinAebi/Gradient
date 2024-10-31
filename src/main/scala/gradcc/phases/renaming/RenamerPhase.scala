@@ -15,12 +15,12 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
     convertTerm(in)(using Ctx(Map.empty, MutMap.empty, reporter))
 
   private def convertTerm(term: A.TermTree)(using ctx: Ctx): U.TermTree = term match {
-    case path: A.PathTree =>
-      convertPath(path)
+    case path: A.StablePathTree =>
+      convertStablePath(path)
     case A.CapTree(position) =>
       U.CapTree(position)
     case A.BoxTree(boxed, position) =>
-      U.BoxTree(convertPath(boxed), position)
+      U.BoxTree(convertStablePath(boxed), position)
     case A.AbsTree(varId, varType, body, position) =>
       val newCtx = ctx.withNewId(varId.id)
       U.AbsTree(
@@ -31,15 +31,15 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
       )
     case A.RecordLiteralTree(fields, position) =>
       U.RecordLiteralTree(
-        fields.map((fld, p) => (convertField(fld), convertPath(p))),
+        fields.map((fld, p) => (convertField(fld), convertStablePath(p))),
         position
       )
     case A.UnitLiteralTree(position) =>
       U.UnitLiteralTree(position)
     case A.AppTree(callee, arg, position) =>
-      U.AppTree(convertPath(callee), convertPath(arg), position)
-    case A.UnboxTree(captureSet, boxed, position) =>
-      U.UnboxTree(convertCaptureSetTree(captureSet), convertPath(boxed), position)
+      U.AppTree(convertStablePath(callee), convertStablePath(arg), position)
+    case A.UnboxTree(captureDescr, boxed, position) =>
+      U.UnboxTree(convertCaptureDescriptor(captureDescr), convertStablePath(boxed), position)
     case A.LetTree(varId, value, typeAnnot, body, position) =>
       val newCtx = ctx.withNewId(varId.id)
       U.LetTree(
@@ -52,22 +52,41 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
     case A.RegionTree(position) =>
       U.RegionTree(position)
     case A.DerefTree(ref, position) =>
-      U.DerefTree(convertPath(ref), position)
+      U.DerefTree(convertStablePath(ref), position)
     case A.AssignTree(ref, newVal, position) =>
-      U.AssignTree(convertPath(ref), convertPath(newVal), position)
+      U.AssignTree(convertStablePath(ref), convertStablePath(newVal), position)
     case A.RefTree(regionCap, initVal, position) =>
-      U.RefTree(convertPath(regionCap), convertPath(initVal), position)
+      U.RefTree(convertStablePath(regionCap), convertStablePath(initVal), position)
     case A.ModuleTree(regionCap, fields, position) =>
       U.ModuleTree(
-        convertPath(regionCap),
-        fields.map((fld, p) => (convertField(fld), convertPath(p))),
+        convertStablePath(regionCap),
+        fields.map((fld, p) => (convertField(fld), convertStablePath(p))),
+        position
+      )
+    case A.EnclosureTree(permissions, body, position) =>
+      U.EnclosureTree(
+        convertCaptureSetTree(permissions),
+        convertTerm(body),
+        position
+      )
+    case A.ObscurTree(obscured, varId, body, position) =>
+      val newCtx = ctx.withNewId(varId.id)
+      U.ObscurTree(
+        convertStablePath(obscured)(using ctx),
+        convertIdentifier(varId)(using newCtx),
+        convertTerm(body)(using newCtx),
         position
       )
   }
+  
+  private def convertStablePath(path: A.StablePathTree)(using ctx: Ctx): U.StablePathTree = path match {
+    case properP: A.ProperPathTree => convertProperPath(properP)
+    case A.BrandedPathTree(properPath, position) => U.BrandedPathTree(convertProperPath(properPath), position)
+  }
 
-  private def convertPath(path: A.PathTree)(using ctx: Ctx): U.PathTree = path match {
+  private def convertProperPath(path: A.ProperPathTree)(using ctx: Ctx): U.ProperPathTree = path match {
     case id: A.IdentifierTree => convertIdentifier(id)
-    case A.SelectTree(root, fld, position) => U.SelectTree(convertPath(root), convertField(fld), position)
+    case A.SelectTree(root, fld, position) => U.SelectTree(convertProperPath(root), convertField(fld), position)
   }
 
   private def convertIdentifier(ident: A.IdentifierTree)(using ctx: Ctx): U.IdentifierTree = {
@@ -112,10 +131,15 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
         position
       )
   }
+  
+  private def convertCaptureDescriptor(descr: A.CaptureDescriptorTree)(using ctx: Ctx): U.CaptureDescriptorTree = descr match {
+    case cs: A.CaptureSetTree => convertCaptureSetTree(cs)
+    case A.BrandDescriptorTree(position) => U.BrandDescriptorTree(position)
+  }
 
   private def convertCaptureSetTree(capt: A.CaptureSetTree)(using ctx: Ctx): U.CaptureSetTree = capt match {
     case A.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
-      U.NonRootCaptureSetTree(capturedVarsInOrder.map(convertPath), position)
+      U.NonRootCaptureSetTree(capturedVarsInOrder.map(convertProperPath), position)
     case A.RootCaptureSetTree(position) =>
       U.RootCaptureSetTree(position)
   }

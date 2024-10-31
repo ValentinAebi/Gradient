@@ -1,7 +1,7 @@
 package gradcc.phases.typechecking
 
 import gradcc.*
-import gradcc.asts.{TypedTerm, UniqueVarId, TypedTerms as T, UniquelyNamedTerms as U}
+import gradcc.asts.{TypedTermTree, UniqueVarId, TypedTerms as T, UniquelyNamedTerms as U}
 import gradcc.lang.*
 import gradcc.phases.SimplePhase
 import gradcc.phases.prettyprinting.TermsPrettyprinter
@@ -9,20 +9,19 @@ import gradcc.phases.typechecking.SubtypingRelation.*
 import gradcc.reporting.{Position, Reporter}
 
 // TODO check pack with Alex
-// TODO tests/examples with references (and other features)
 // TODO double-check every typing/subtyping/subcapturing rule
 
-final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTree]]("Typechecker") {
+final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.TermTree]]("Typechecker") {
   private val varCreator = SyntheticVarCreator()
 
-  private val pp: TypedTerm[T.TermTree] => String = TermsPrettyprinter(T)
+  private val pp: TypedTermTree[T.TermTree] => String = TermsPrettyprinter(T)
 
   override val acceptsFaultyInput: Boolean = false
 
-  override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTerm[T.TermTree] =
+  override protected def runImpl(in: U.TermTree, reporter: Reporter): TypedTermTree[T.TermTree] =
     typeTerm(in)(using Ctx(Map.empty, Seq.empty, reporter))
 
-  private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTerm[T.TermTree] = t match {
+  private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTermTree[T.TermTree] = t match {
     case p: U.PathTree => typePath(p)
     case U.CapTree(position) =>
       throw AssertionError("unexpected type computation on the root capability")
@@ -43,7 +42,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val typedFields = convertFields(fields, typePath)
       val fieldsToTypesAndCapSetOpt = collectTypes(typedFields).map { fldTypes =>
         val fieldsToType = fields.map((fld, _) => U.mkField(fld)).zip(fldTypes).toMap
-        val recordCapSet = fldTypes.flatMap(_.captureSet).toSet
+        val recordCapSet = fldTypes.flatMap(_.captureDescr).toSet
         (fieldsToType, recordCapSet)
       }
       val selfReferringTypeOpt = fieldsToTypesAndCapSetOpt.map { (rawFieldsToTypes, rawCapSet) =>
@@ -89,9 +88,9 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val unboxCapSet = T.mkCaptureSet(typedCapSet)
       T.UnboxTree(typedCapSet, typedBoxed, position).withType(
         typedBoxed.tpe.flatMap {
-          case Type(BoxShape(boxed), _) if boxed.captureSet == unboxCapSet => Some(boxed)
+          case Type(BoxShape(boxed), _) if boxed.captureDescr == unboxCapSet => Some(boxed)
           case Type(BoxShape(boxed), _) =>
-            ctx.reportError(s"illegal unboxing: the capture set ${capSetToString(boxed.captureSet)} of the unboxed type " +
+            ctx.reportError(s"illegal unboxing: the capture set ${capSetToString(boxed.captureDescr)} of the unboxed type " +
               s"differs from the capture set ${capSetToString(unboxCapSet)} mentioned by the unbox term", position)
           case tpe => ctx.reportError(s"cannot unbox non-box type $tpe", position)
         }
@@ -134,10 +133,10 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val typedNewVal = typePath(newVal)
       (typedRef.tpe, typedNewVal.tpe) match {
         case (Some(Type(RefShape(referenced), _)), Some(valType)) => {
-          if valType.captureSet.isEmpty
+          if valType.captureDescr.isEmpty
           then mustBeAssignable(referenced, valType.shape, position, Some(UnitShape ^ Set.empty))
           else ctx.reportError(
-            s"illegal assignment: capture set ${capSetToString(valType.captureSet)} of assigned value is not empty, please fix this by boxing it",
+            s"illegal assignment: capture set ${capSetToString(valType.captureDescr)} of assigned value is not empty, please fix this by boxing it",
             position
           )
         }
@@ -170,7 +169,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
       val substFields = fields.map(
         (fld, p) =>
           val regPath = SelectPath(VarPath(selfRefVar), RegionField)
-          val TypedTerm(convP, pType) = typePath(p)
+          val TypedTermTree(convP, pType) = typePath(p)
           convertField(fld) -> TypedTerm(convP, pType.map(substitute(_)(using Map(regionCapPath -> regPath))))
       )
       val tpeOpt = collectTypes(substFields).map { fieldTypes =>
@@ -181,7 +180,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
     }
   }
 
-  private def typePath(p: U.PathTree)(using ctx: Ctx): TypedTerm[T.PathTree] = p match {
+  private def typePath(p: U.PathTree)(using ctx: Ctx): TypedTermTree[T.PathTree] = p match {
     case U.IdentifierTree(id, position) =>
       // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
       T.IdentifierTree(id, position).withType(ctx.varLookup(id))
@@ -287,8 +286,8 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   }
 
   extension [A <: T.TermTree](term: A) {
-    private def withType(tpe: Option[Type]): TypedTerm[A] = TypedTerm(term, tpe)
-    private def withType(tpe: Type): TypedTerm[A] = term.withType(Some(tpe))
+    private def withType(tpe: Option[Type]): TypedTermTree[A] = TypedTermTree(term, tpe)
+    private def withType(tpe: Type): TypedTermTree[A] = term.withType(Some(tpe))
   }
 
   private def typeDescr(optType: Option[Type]): String =
@@ -297,9 +296,9 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTerm[T.TermTre
   private def capSetToString(capSet: Set[Capturable]): String =
     capSet.toSeq.sortBy(_.toString).mkString("{", ",", "}")
 
-  private def collectTypes[B <: T.TermTree](seq: Seq[(T.FieldTree, TypedTerm[B])]): Option[Seq[Type]] = {
+  private def collectTypes[B <: T.TermTree](seq: Seq[(T.FieldTree, TypedTermTree[B])]): Option[Seq[Type]] = {
     seq.foldRight(Option(Nil)) {
-      case ((_, TypedTerm(_, tpe)), acc) => for tpe <- tpe; tail <- acc yield tpe :: tail
+      case ((_, TypedTermTree(_, tpe)), acc) => for tpe <- tpe; tail <- acc yield tpe :: tail
     }
   }
 

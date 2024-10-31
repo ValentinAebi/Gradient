@@ -277,9 +277,17 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
       case KeywordToken(EnclKw, enclPos) :: OperatorToken(OpenSquareBracket, _) :: OperatorToken(OpenBrace, openBrPos) :: rem1 =>
         val (permissionsVars, rem2) = parseCommaSeparatedProperPaths(rem1)
         rem2 match {
-          case OperatorToken(CloseBrace, _) :: OperatorToken(CloseSquareBracket, _) :: rem3 =>
-            val (body, rem4) = parseTerm(rem3)
-            (EnclosureTree(NonRootCaptureSetTree(permissionsVars, openBrPos), body, enclPos), rem4)
+          case OperatorToken(CloseBrace, _) :: OperatorToken(CloseSquareBracket, _)
+            :: OperatorToken(OpenSquareBracket, _) :: rem3 => {
+            val (tpe, rem4) = parseType(rem3)
+            rem4 match {
+              case OperatorToken(CloseSquareBracket, _) :: rem5 =>
+                val (body, rem6) = parseTerm(rem5)
+                (EnclosureTree(NonRootCaptureSetTree(permissionsVars, openBrPos), tpe, body, enclPos), rem6)
+              case _ =>
+                reporter.fatal("expected ']' after type", rem4.headPos)
+            }
+          }
           case _ =>
             reporter.fatal("expected end of enclosure term", rem2.headPos)
         }

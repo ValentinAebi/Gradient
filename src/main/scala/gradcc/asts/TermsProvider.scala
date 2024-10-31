@@ -4,8 +4,6 @@ import gradcc.lang.Type
 import gradcc.reporting.Position
 
 trait TermsProvider {
-
-  private val disambiguationMarker: Char = '$'
   
   type VarId
   type R[+T <: TermTree]
@@ -40,37 +38,92 @@ trait TermsProvider {
   case class RegFieldTree(override val position: Position) extends FieldTree
 
   sealed trait ValueTree extends TermTree
-  case class BoxTree(boxed: R[StablePathTree], override val position: Position) extends ValueTree
-  case class AbsTree(varId: IdentifierTree, tpe: TypeTree, body: R[TermTree], override val position: Position) extends ValueTree
+  case class BoxTree(
+                      boxed: R[StablePathTree],
+                      override val position: Position
+                    ) extends ValueTree
+  case class AbsTree(
+                      varId: IdentifierTree,
+                      tpe: TypeTree,
+                      body: R[TermTree],
+                      override val position: Position
+                    ) extends ValueTree
   case class RecordLiteralTree(fields: Seq[(FieldTree, R[StablePathTree])], override val position: Position) extends ValueTree
   case class UnitLiteralTree(override val position: Position) extends ValueTree
   
   case class AppTree(callee: R[StablePathTree], arg: R[StablePathTree], override val position: Position) extends TermTree
-  case class UnboxTree(captureSet: CaptureDescriptorTree, boxed: R[StablePathTree], override val position: Position) extends TermTree
-  case class LetTree(varId: IdentifierTree, value: R[TermTree], typeAnnot: Option[TypeTree], body: R[TermTree], override val position: Position) extends TermTree
+  case class UnboxTree(
+                        captureSet: CaptureDescriptorTree,
+                        boxed: R[StablePathTree],
+                        override val position: Position
+                      ) extends TermTree
+  case class LetTree(
+                      varId: IdentifierTree,
+                      value: R[TermTree],
+                      typeAnnot: Option[TypeTree],
+                      body: R[TermTree],
+                      override val position: Position
+                    ) extends TermTree
   case class RegionTree(override val position: Position) extends TermTree
   case class DerefTree(ref: R[StablePathTree], override val position: Position) extends TermTree
-  case class AssignTree(ref: R[StablePathTree], newVal: R[StablePathTree], override val position: Position) extends TermTree
-  case class RefTree(regionCap: R[StablePathTree], initVal: R[StablePathTree], override val position: Position) extends TermTree
-  case class ModuleTree(regionCap: R[StablePathTree], fields: Seq[(FieldTree, R[StablePathTree])], override val position: Position) extends TermTree
-  case class EnclosureTree(permissions: CaptureSetTree, body: R[TermTree], override val position: Position) extends TermTree
-  case class ObscurTree(obscured: R[StablePathTree], varId: IdentifierTree, body: R[TermTree], override val position: Position) extends TermTree
+  case class AssignTree(
+                         ref: R[StablePathTree],
+                         newVal: R[StablePathTree],
+                         override val position: Position
+                       ) extends TermTree
+  case class RefTree(
+                      regionCap: R[StablePathTree],
+                      initVal: R[StablePathTree],
+                      override val position: Position
+                    ) extends TermTree
+  case class ModuleTree(
+                         regionCap: R[StablePathTree],
+                         fields: Seq[(FieldTree, R[StablePathTree])],
+                         override val position: Position
+                       ) extends TermTree
+  case class EnclosureTree(
+                            permissions: CaptureSetTree,
+                            tpe: TypeTree,
+                            body: R[TermTree],
+                            override val position: Position
+                          ) extends TermTree
+  case class ObscurTree(
+                         obscured: R[StablePathTree],
+                         varId: IdentifierTree,
+                         body: R[TermTree],
+                         override val position: Position
+                       ) extends TermTree
   
-  case class TypeTree(shape: ShapeTree, captureSet: Option[CaptureSetTree], override val position: Position) extends Ast
+  case class TypeTree(
+                       shape: ShapeTree,
+                       captureSet: Option[CaptureSetTree],
+                       override val position: Position
+                     ) extends Ast
 
   sealed trait ShapeTree extends Ast
-  // TODO how to represent resources like Fs, Net, etc.?
   case class TopShapeTree(override val position: Position) extends ShapeTree
-  case class AbsShapeTree(varId: IdentifierTree, varType: TypeTree, resType: TypeTree, override val position: Position) extends ShapeTree
+  case class AbsShapeTree(
+                           varId: IdentifierTree,
+                           varType: TypeTree,
+                           resType: TypeTree,
+                           override val position: Position
+                         ) extends ShapeTree
   case class BoxShapeTree(boxedType: TypeTree, override val position: Position) extends ShapeTree
   case class UnitShapeTree(override val position: Position) extends ShapeTree
   case class RefShapeTree(referencedType: ShapeTree, override val position: Position) extends ShapeTree
   case class RegShapeTree(override val position: Position) extends ShapeTree
-  case class RecordShapeTree(selfRef: Option[IdentifierTree], fieldsInOrder: Seq[(FieldTree, TypeTree)], override val position: Position) extends ShapeTree
+  case class RecordShapeTree(
+                              selfRef: Option[IdentifierTree],
+                              fieldsInOrder: Seq[(FieldTree, TypeTree)],
+                              override val position: Position
+                            ) extends ShapeTree
   
   sealed trait CaptureDescriptorTree extends Ast
   sealed trait CaptureSetTree extends CaptureDescriptorTree
-  case class NonRootCaptureSetTree(capturedVarsInOrder: Seq[R[ProperPathTree]], override val position: Position) extends CaptureSetTree
+  case class NonRootCaptureSetTree(
+                                    capturedVarsInOrder: Seq[R[ProperPathTree]],
+                                    override val position: Position
+                                  ) extends CaptureSetTree
   case class RootCaptureSetTree(override val position: Position) extends CaptureSetTree
   case class BrandDescriptorTree(override val position: Position) extends CaptureDescriptorTree
   
