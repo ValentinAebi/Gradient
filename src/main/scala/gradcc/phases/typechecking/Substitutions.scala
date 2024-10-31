@@ -50,8 +50,7 @@ def substitute(capDescr: CaptureDescriptor)(using SubstMap): CaptureDescriptor =
 }
 
 def substitute(capturable: Capturable)(using subst: SubstMap): Capturable = capturable match {
-  case p: ProperPath =>
-    subst.getOrElse(p, p)
+  case p: ProperPath => substitute(p)
   case BrandedPath(p) =>
     substitute(p) match {
       // TODO check that the resulting path must indeed always be branded
