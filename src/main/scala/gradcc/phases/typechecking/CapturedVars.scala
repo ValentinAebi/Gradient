@@ -29,6 +29,8 @@ def cv(term: TermTree): CaptureDescriptor = term match {
     cv(regionCap) ++ cvsFrom(fields, (fld, t) => cv(t))
   case EnclosureTree(permissions, tpe, body, position) =>
     mkCaptureDescr(permissions) ++ cvsFrom(tpe.captureSet, mkCaptureSet)
+  case ObscurTree(obscured, varId, body, position) =>
+    Brand
 }
 
 def cv(typeTree: TypeTree): CaptureDescriptor = {
@@ -54,11 +56,6 @@ private def cvsFrom[T](iterable: Iterable[T], extractor: T => CaptureDescriptor)
   iterable.foldLeft[CaptureDescriptor](CaptureSet.empty)(_ ++ extractor(_))
 
 extension (l: CaptureDescriptor) {
-
-  private infix def ++(r: CaptureDescriptor): CaptureDescriptor = (l, r) match {
-    case (CaptureSet(ls), CaptureSet(rs)) => CaptureSet(ls ++ rs)
-    case _ => Brand
-  }
 
   private def withoutPathsRootedIn(varId: VarId): CaptureDescriptor = l match {
     case CaptureSet(captured) => CaptureSet(captured.filterNot(_.isRootedIn(varId)))

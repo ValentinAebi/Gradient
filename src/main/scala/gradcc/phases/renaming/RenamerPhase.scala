@@ -63,9 +63,10 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
         fields.map((fld, p) => (convertField(fld), convertStablePath(p))),
         position
       )
-    case A.EnclosureTree(permissions, body, position) =>
+    case A.EnclosureTree(permissions, tpe, body, position) =>
       U.EnclosureTree(
         convertCaptureSetTree(permissions),
+        convertType(tpe),
         convertTerm(body),
         position
       )

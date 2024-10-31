@@ -40,7 +40,7 @@ trait UidTermsProvider extends TermsProvider {
 
   def mkStablePath(stablePath: StablePathTree): StablePath = stablePath match {
     case properPathTree: ProperPathTree => mkProperPath(properPathTree)
-    case BrandedPathTree(properPath, position) => BrandedPath(mkProperPath(properPath))
+    case BrandedPathTree(properPath, position) => BrandedPath(mkProperPath(getTerm(properPath)))
   }
 
   def mkProperPath(properPath: ProperPathTree): ProperPath = properPath match {

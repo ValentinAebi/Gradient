@@ -31,7 +31,7 @@ trait TermsProvider {
   case class SelectTree(lhs: R[ProperPathTree], field: FieldTree, override val position: Position) extends ProperPathTree {
     override def description: String = s".$field"
   }
-  case class BrandedPathTree(properPath: ProperPathTree, override val position: Position) extends StablePathTree
+  case class BrandedPathTree(properPath: R[ProperPathTree], override val position: Position) extends StablePathTree
 
   sealed trait FieldTree extends Ast
   case class NamedFieldTree(fieldName: String, override val position: Position) extends FieldTree

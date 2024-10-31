@@ -22,7 +22,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
     typeTerm(in)(using Ctx(Map.empty, Seq.empty, reporter))
 
   private def typeTerm(t: U.TermTree)(using ctx: Ctx): TypedTermTree[T.TermTree] = t match {
-    case p: U.PathTree => typePath(p)
+    case p: U.StablePathTree => typeStablePath(p)
     case U.CapTree(position) =>
       throw AssertionError("unexpected type computation on the root capability")
     case abs@U.AbsTree(varIdent, varTypeTree, body, position) => {
@@ -34,15 +34,17 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       )
     }
     case U.BoxTree(boxed, position) =>
-      val typedBoxed = typePath(boxed)
+      val typedBoxed = typeStablePath(boxed)
       T.BoxTree(typedBoxed, position).withType(
-        typedBoxed.tpe.map(BoxShape(_) ^ Set.empty)
+        typedBoxed.tpe.map(BoxShape(_) ^ CaptureSet.empty)
       )
     case recordLit@U.RecordLiteralTree(fields, position) =>
-      val typedFields = convertFields(fields, typePath)
+      val typedFields = convertFields(fields, typeStablePath)
       val fieldsToTypesAndCapSetOpt = collectTypes(typedFields).map { fldTypes =>
         val fieldsToType = fields.map((fld, _) => U.mkField(fld)).zip(fldTypes).toMap
-        val recordCapSet = fldTypes.flatMap(_.captureDescr).toSet
+        val recordCapSet = fldTypes.foldLeft[CaptureDescriptor](CaptureSet(Set.empty)){ (accCSet, tpe) =>
+          accCSet ++ tpe.captureDescr
+        }
         (fieldsToType, recordCapSet)
       }
       val selfReferringTypeOpt = fieldsToTypesAndCapSetOpt.map { (rawFieldsToTypes, rawCapSet) =>
@@ -50,12 +52,12 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
         val selfRef = varCreator.nextVar(Keyword.SelfKw.str)
         val selfAwareCtx = ctxWithEquivalences(ctx, selfRef, recordLit)
         val selfRefPath = VarPath(selfRef)
-        val substMap: Map[Capturable, ProperPath] =
+        val substMap: Map[StablePath, StablePath] =
           (for (freeP <- freePathsInFields; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, freeP)) yield {
             freeP -> pathFromSelf
           }).toMap
         val substFieldsToTypes = rawFieldsToTypes.map((fld, tpe) => (fld, substitute(tpe)(using substMap)))
-        val filteredCapSet = rawCapSet -- substMap.keys
+        val filteredCapSet = rawCapSet.removed(substMap.keys)
         val optSelfRef = if substMap.isEmpty then None else Some(selfRef)
         RecordShape(optSelfRef, substFieldsToTypes) ^ filteredCapSet
       }
@@ -66,32 +68,32 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       }
       T.RecordLiteralTree(typedFields, position).withType(letTypeOpt)
     case U.UnitLiteralTree(position) =>
-      T.UnitLiteralTree(position).withType(UnitShape ^ Set.empty)
+      T.UnitLiteralTree(position).withType(UnitShape ^ CaptureSet.empty)
     case U.AppTree(callee, arg, position) => {
-      val typedCallee = typePath(callee)
-      val typedArg = typePath(arg)
+      val typedCallee = typeStablePath(callee)
+      val typedArg = typeStablePath(arg)
       val tpeOpt = (typedCallee.tpe, typedArg.tpe) match {
         case (None, _) => None
         case (_, None) => None
         case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
           mustBeAssignable(varType, argType, arg.position, {
-            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkProperPath(arg))))
+            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkStablePath(arg))))
           })
         case (Some(callerType), _) =>
           ctx.reportError(s"$callerType is not callable", position)
       }
       T.AppTree(typedCallee, typedArg, position).withType(tpeOpt)
     }
-    case U.UnboxTree(captureSet, boxed, position) => {
-      val typedCapSet = typeCaptureSet(captureSet)
-      val typedBoxed = typePath(boxed)
-      val unboxCapSet = T.mkCaptureSet(typedCapSet)
-      T.UnboxTree(typedCapSet, typedBoxed, position).withType(
+    case U.UnboxTree(captureDescr, boxed, position) => {
+      val typedCapDescr = typeCaptureDescr(captureDescr)
+      val typedBoxed = typeStablePath(boxed)
+      val unboxCapSet = T.mkCaptureDescr(typedCapDescr)
+      T.UnboxTree(typedCapDescr, typedBoxed, position).withType(
         typedBoxed.tpe.flatMap {
           case Type(BoxShape(boxed), _) if boxed.captureDescr == unboxCapSet => Some(boxed)
           case Type(BoxShape(boxed), _) =>
-            ctx.reportError(s"illegal unboxing: the capture set ${capSetToString(boxed.captureDescr)} of the unboxed type " +
-              s"differs from the capture set ${capSetToString(unboxCapSet)} mentioned by the unbox term", position)
+            ctx.reportError(s"illegal unboxing: the capture set ${boxed.captureDescr} of the unboxed type " +
+              s"differs from the capture set $unboxCapSet mentioned by the unbox term", position)
           case tpe => ctx.reportError(s"cannot unbox non-box type $tpe", position)
         }
       )
@@ -119,24 +121,25 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       T.LetTree(convertIdent(varId), typedValue, typeAnnot.map(typeTypeTree), typedBody, position).withType(letTypeOpt)
     }
     case U.RegionTree(position) =>
-      T.RegionTree(position).withType(RegionShape ^ Set(RootCapability))
+      T.RegionTree(position).withType(RegionShape ^ CaptureSet(RootCapability))
     case U.DerefTree(ref, position) =>
-      val typedRef = typePath(ref)
+      val typedRef = typeStablePath(ref)
       T.DerefTree(typedRef, position).withType(
         typedRef.tpe.flatMap {
-          case Type(RefShape(referenced), captureSet) => Some(referenced ^ Set.empty)
+          case Type(RefShape(referenced), captureSet) => Some(referenced ^ CaptureSet.empty)
           case tpe => ctx.reportError(s"illegal dereference: $tpe is not a reference", position)
         }
       )
     case U.AssignTree(ref, newVal, position) => {
-      val typedRef = typePath(ref)
-      val typedNewVal = typePath(newVal)
+      val typedRef = typeStablePath(ref)
+      val typedNewVal = typeStablePath(newVal)
       (typedRef.tpe, typedNewVal.tpe) match {
         case (Some(Type(RefShape(referenced), _)), Some(valType)) => {
-          if valType.captureDescr.isEmpty
-          then mustBeAssignable(referenced, valType.shape, position, Some(UnitShape ^ Set.empty))
+          // TODO check that we indeed need to box branded types
+          if valType.captureDescr.isCapSetOfPureType
+          then mustBeAssignable(referenced, valType.shape, position, Some(UnitShape ^ CaptureSet.empty))
           else ctx.reportError(
-            s"illegal assignment: capture set ${capSetToString(valType.captureDescr)} of assigned value is not empty, please fix this by boxing it",
+            s"illegal assignment: capture set ${valType.captureDescr} of assigned value is not empty, please fix this by boxing it",
             position
           )
         }
@@ -144,48 +147,80 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
           ctx.reportError(s"expected a reference type as assignment target, found $nonRefType", position)
         case _ => ()
       }
-      T.AssignTree(typedRef, typedNewVal, position).withType(UnitShape ^ Set.empty)
+      T.AssignTree(typedRef, typedNewVal, position).withType(UnitShape ^ CaptureSet.empty)
     }
     case U.RefTree(regionCap, initVal, position) =>
-      val typedRegionCap = typePath(regionCap)
-      val typedInitVal = typePath(initVal)
+      val typedRegionCap = typeStablePath(regionCap)
+      val typedInitVal = typeStablePath(initVal)
       val tpeOpt = (typedRegionCap.tpe, typedInitVal.tpe) match {
         case (Some(Type(RegionShape, _)), Some(Type(initValShape, initValCaptureSet))) =>
-          if initValCaptureSet.isEmpty
-          then Some(RefShape(initValShape) ^ Set(U.mkProperPath(regionCap)))
-          else ctx.reportError("reference value must have an empty capture set", position)
+          // TODO check that we indeed need to box branded types
+          if initValCaptureSet.isCapSetOfPureType
+          then Some(RefShape(initValShape) ^ capDescrFor(U.mkStablePath(regionCap)))
+          else ctx.reportError(
+            "value assigned to reference must have an empty capture set, please fix that by boxing it",
+            position)
         case (Some(nonRegionType), _) =>
           ctx.reportError(s"expected a region, found $nonRegionType", position)
         case _ => None
       }
       T.RefTree(typedRegionCap, typedInitVal, position).withType(tpeOpt)
     case U.ModuleTree(regionCap, fields, position) => {
-      val typedRegionCap = typePath(regionCap)
+      val typedRegionCap = typeStablePath(regionCap)
       typedRegionCap.tpe.foreach { regionCapType =>
-        mustBeAssignable(RegionShape ^ Set(RootCapability), regionCapType, regionCap.position, None)
+        mustBeAssignable(RegionShape ^ CaptureSet(RootCapability), regionCapType, regionCap.position, None)
       }
       val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
-      val regionCapPath = U.mkProperPath(regionCap)
+      val regionCapPath = U.mkStablePath(regionCap)
       val substFields = fields.map(
         (fld, p) =>
           val regPath = SelectPath(VarPath(selfRefVar), RegionField)
-          val TypedTermTree(convP, pType) = typePath(p)
-          convertField(fld) -> TypedTerm(convP, pType.map(substitute(_)(using Map(regionCapPath -> regPath))))
+          val TypedTermTree(convP, pType) = typeStablePath(p)
+          convertField(fld) -> TypedTermTree(convP, pType.map(substitute(_)(using Map(regionCapPath -> regPath))))
       )
       val tpeOpt = collectTypes(substFields).map { fieldTypes =>
         val fieldsToTypes = substFields.map((fld, _) => T.mkField(fld)).zip(fieldTypes).toMap
-        RecordShape(Some(selfRefVar), fieldsToTypes) ^ Set(RootCapability)
+        RecordShape(Some(selfRefVar), fieldsToTypes) ^ CaptureSet(RootCapability)
       }
       T.ModuleTree(typedRegionCap, substFields, position).withType(tpeOpt)
     }
+    case U.EnclosureTree(permissions, explicitTypeTree, body, position) => {
+      val typedPermissions = typeCaptureSet(permissions)
+      val typedExplicitType = typeTypeTree(explicitTypeTree)
+      val typedBody = typeTerm(body)
+      val explicitType = U.mkType(explicitTypeTree)
+      typedBody.tpe.foreach { bodyType =>
+        mustBeAssignable(explicitType, bodyType, position, {
+          Some(explicitType)
+        })
+      }
+      T.EnclosureTree(typedPermissions, typedExplicitType, typedBody, position).withType(explicitType)
+    }
+    case U.ObscurTree(obscured, varId, body, position) => {
+      val typedObscured = typeStablePath(obscured)
+      val convertedVarId = convertIdent(varId)
+      val obscuredTypeCapturingRoot = typedObscured.tpe.map(_.copy(captureDescr = CaptureSet(RootCapability)))
+      val newCtx = ctx.withNewBinding(varId.id, obscuredTypeCapturingRoot)
+      val typedBody = typeTerm(body)(using newCtx)
+      T.ObscurTree(typedObscured, convertedVarId, typedBody, position).withType(typedBody.tpe)
+    }
   }
 
-  private def typePath(p: U.PathTree)(using ctx: Ctx): TypedTermTree[T.PathTree] = p match {
+  private def typeStablePath(p: U.StablePathTree)(using ctx: Ctx): TypedTermTree[T.StablePathTree] = p match {
+    case properPathTree: U.ProperPathTree => typeProperPath(properPathTree)
+    case U.BrandedPathTree(properPath, position) =>
+      val typedProperPath = typeProperPath(properPath)
+      T.BrandedPathTree(typedProperPath, position).withType(
+        typedProperPath.tpe.map(_.copy(captureDescr = Brand))
+      )
+  }
+
+  private def typeProperPath(p: U.ProperPathTree)(using ctx: Ctx): TypedTermTree[T.ProperPathTree] = p match {
     case U.IdentifierTree(id, position) =>
       // id must be found, o.w. the renaming phase stops the pipeline before it reaches this point
       T.IdentifierTree(id, position).withType(ctx.varLookup(id))
     case U.SelectTree(lhs, field, position) =>
-      val typedLhs = typePath(lhs)
+      val typedLhs = typeProperPath(lhs)
       val fld = U.mkField(field)
       T.SelectTree(typedLhs, convertField(field), position).withType(
         typedLhs.tpe
@@ -230,10 +265,15 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       )
   }
 
+  private def typeCaptureDescr(capDescr: U.CaptureDescriptorTree)(using ctx: Ctx): T.CaptureDescriptorTree = capDescr match {
+    case capSet: U.CaptureSetTree => typeCaptureSet(capSet)
+    case U.BrandDescriptorTree(position) => T.BrandDescriptorTree(position)
+  }
+
   private def typeCaptureSet(capSet: U.CaptureSetTree)(using ctx: Ctx): T.CaptureSetTree = capSet match {
     case U.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
-      val typedCapturedVars = capturedVarsInOrder.map(typePath)
-      typedCapturedVars.filter(_.tpe.exists(_.captureSet.isEmpty)).foreach { capVar =>
+      val typedCapturedVars = capturedVarsInOrder.map(typeProperPath)
+      typedCapturedVars.filter(_.tpe.exists(_.isPure)).foreach { capVar =>
         ctx.reporter.warning(s"path ${pp(capVar)} has an empty capture set and is thus not a capability",
           capVar.term.position)
       }
@@ -251,6 +291,11 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
 
   private def convertFields[A, B](fields: Seq[(U.FieldTree, A)], typingFunc: A => B)(using Ctx): Seq[(T.FieldTree, B)] =
     fields.map((fld, a) => (convertField(fld), typingFunc(a)))
+
+  private def capDescrFor(stablePath: StablePath): CaptureDescriptor = stablePath match {
+    case p: ProperPath => CaptureSet(p)
+    case BrandedPath(p) => Brand
+  }
 
   private def mustBeAssignable(expectedType: Type, actualType: Type, pos: Position, ifAssignable: => Option[Type])
                               (using ctx: Ctx): Option[Type] = {
@@ -272,16 +317,19 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
     }
   }
 
-  private def ctxWithEquivalences(ctx: Ctx, varId: UniqueVarId, value: U.TermTree): Ctx = {
+  private def ctxWithEquivalences(initialCtx: Ctx, varId: UniqueVarId, value: U.TermTree): Ctx = {
+    // TODO maybe record equivalences on branded paths too?
     value match {
-      case pathTree: U.PathTree =>
-        ctx.withNewPathEquivalence(VarPath(varId), U.mkProperPath(pathTree))
+      case pathTree: U.ProperPathTree =>
+        initialCtx.withNewPathEquivalence(VarPath(varId), U.mkProperPath(pathTree))
       case recordLiteralTree: U.RecordLiteralTree =>
         val varPath = VarPath(varId)
-        recordLiteralTree.fields.foldLeft(ctx) {
-          case (ctx, (fld, fldVal)) => ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkProperPath(fldVal))
+        recordLiteralTree.fields.foldLeft(initialCtx) {
+          case (ctx, (fld, fldVal: U.ProperPathTree)) =>
+            ctx.withNewSelectEquivalence(varPath, U.mkField(fld), U.mkProperPath(fldVal))
+          case (ctx, (fld, fldVal)) => ctx
         }
-      case _ => ctx
+      case _ => initialCtx
     }
   }
 
@@ -292,9 +340,6 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
 
   private def typeDescr(optType: Option[Type]): String =
     optType.map(_.toString).getOrElse("??")
-
-  private def capSetToString(capSet: Set[Capturable]): String =
-    capSet.toSeq.sortBy(_.toString).mkString("{", ",", "}")
 
   private def collectTypes[B <: T.TermTree](seq: Seq[(T.FieldTree, TypedTermTree[B])]): Option[Seq[Type]] = {
     seq.foldRight(Option(Nil)) {

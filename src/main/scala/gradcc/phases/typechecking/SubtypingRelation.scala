@@ -10,22 +10,25 @@ object SubtypingRelation {
     case (Type(lSh, lCap), Type(rSh, rCap)) =>
       lSh.subshapeOf(rSh) && lCap.subcaptureOf(rCap)
   }
-
-  extension (l: Set[Capturable]) def subcaptureOf(r: Set[Capturable])(using ctx: Ctx): Boolean = {
-    if (l.size == 1) {
-      l.head match {
-        // Sc-path
-        case p: ProperPath if ctx.pathLookup(p).exists(_.captureDescr.subcaptureOf(r)) => true
-        // Sc-elem
-        case p if r.contains(p) => true
-        // Sc-mem
-        case SelectPath(lhs, select) if Set(lhs).subcaptureOf(r) => true
-        case _ => false
+  
+  extension (l: CaptureDescriptor) def subcaptureOf(r: CaptureDescriptor)(using ctx: Ctx): Boolean = (l, r) match {
+    case (Brand, Brand) => true
+    case (CaptureSet(lcs), CaptureSet(rcs)) =>
+      if (lcs.size == 1) {
+        lcs.head match {
+          // Sc-path
+          case p: ProperPath if ctx.pathLookup(p).exists(_.captureDescr.subcaptureOf(r)) => true
+          // Sc-elem
+          case p if rcs.contains(p) => true
+          // Sc-mem
+          case SelectPath(lhs, select) if CaptureSet(lhs).subcaptureOf(r) => true
+          case _ => false
+        }
+      } else {
+        // Sc-set
+        lcs.forall(c => CaptureSet(c).subcaptureOf(r))
       }
-    } else {
-      // Sc-set
-      l.forall(c => Set(c).subcaptureOf(r))
-    }
+    case _ => false
   }
 
   extension (l: Shape) def subshapeOf(r: Shape)(using Ctx): Boolean = (l, r) match {

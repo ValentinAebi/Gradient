@@ -3,6 +3,9 @@ package gradcc.lang
 import gradcc.asts.UniqueVarId
 
 case class Type(shape: Shape, captureDescr: CaptureDescriptor) {
+  
+  def isPure: Boolean = captureDescr.isCapSetOfPureType
+  
   override def toString: String = {
     shape match {
       case absShape: AbsShape => absShape.toStringWith(captureDescr)
@@ -15,16 +18,30 @@ case class Type(shape: Shape, captureDescr: CaptureDescriptor) {
 }
 
 sealed trait CaptureDescriptor {
+  def isCapSetOfPureType: Boolean
   def prettified: String
-  final def toHatNotation: String = "^" ++ prettified
+  def toHatNotation: String
+  
+  infix def ++(that: CaptureDescriptor): CaptureDescriptor = (this, that) match {
+    case (CaptureSet(l), CaptureSet(r)) => CaptureSet(l ++ r)
+    case _ => Brand
+  }
+  
+  def removed(rem: Iterable[Capturable]): CaptureDescriptor
+  
 }
 
 case class CaptureSet(captured: Set[Capturable]) extends CaptureDescriptor {
+  override def isCapSetOfPureType: Boolean = captured.isEmpty
+  override def removed(rem: Iterable[Capturable]): CaptureSet = CaptureSet(captured -- rem)
   override def prettified: String = {
     if captured.isEmpty then ""
     else captured.mkString("{", ",", "}")
   }
-
+  override def toHatNotation: String = {
+    if captured.isEmpty then ""
+    else captured.mkString("^{", ",", "}")
+  }
   override def toString: String = captured.mkString("{", ",", "}")
 }
 
@@ -34,7 +51,10 @@ object CaptureSet {
 }
 
 case object Brand extends CaptureDescriptor {
+  override def isCapSetOfPureType: Boolean = false
+  override def removed(rem: Iterable[Capturable]): Brand.type = this
   override def prettified: String = "#"
+  override def toHatNotation: String = "^#"
   override def toString: String = "#"
 }
 
@@ -42,27 +62,26 @@ sealed trait Capturable {
   def isRootedIn(varId: UniqueVarId): Boolean
 }
 
-sealed trait StablePath
+sealed trait StablePath extends Capturable
 
-sealed trait ProperPath extends StablePath, Capturable
+sealed trait ProperPath extends StablePath
 
 case class VarPath(root: UniqueVarId) extends ProperPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = (varId == root)
-
   override def toString: String = root.toString
 }
 
 case class SelectPath(lhs: ProperPath, field: RecordField) extends ProperPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = lhs.isRootedIn(varId)
-
   override def toString: String = s"$lhs.$field"
 }
 
-case class BrandedPath(p: ProperPath) extends StablePath
+case class BrandedPath(p: ProperPath) extends StablePath {
+  export p.isRootedIn
+}
 
 case object RootCapability extends Capturable {
   override def isRootedIn(varId: UniqueVarId): Boolean = false
-
   override def toString: String = "cap"
 }
 

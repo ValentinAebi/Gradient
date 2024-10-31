@@ -26,7 +26,7 @@ def TermsPrettyprinter(
         ppField(field)
       case p.BrandedPathTree(properPath, position) =>
         add("#")
-        ppTerm(properPath)
+        ppRecTerm(properPath)
       case p.BoxTree(boxed, position) =>
         add(BoxKw).add(" ")
         ppRecTerm(boxed)
@@ -89,9 +89,11 @@ def TermsPrettyprinter(
         ppRecTerm(regionCap)
         add(") ")
         addFieldsList(fields)
-      case p.EnclosureTree(permissions, body, position) =>
+      case p.EnclosureTree(permissions, tpe, body, position) =>
         add(EnclKw).add("[")
         ppCapt(permissions)
+        add("][")
+        ppType(tpe)
         add("]")
         ppRecTerm(body)
       case p.ObscurTree(obscured, varId, body, position) =>
