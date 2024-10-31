@@ -180,7 +180,8 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       )
       val tpeOpt = collectTypes(substFields).map { fieldTypes =>
         val fieldsToTypes = substFields.map((fld, _) => T.mkField(fld)).zip(fieldTypes).toMap
-        RecordShape(Some(selfRefVar), fieldsToTypes) ^ CaptureSet(RootCapability)
+        val regType = RegionShape ^ CaptureSet(RootCapability)
+        RecordShape(Some(selfRefVar), fieldsToTypes.updated(RegionField, regType)) ^ CaptureSet(RootCapability)
       }
       T.ModuleTree(typedRegionCap, substFields, position).withType(tpeOpt)
     }
