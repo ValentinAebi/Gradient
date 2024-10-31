@@ -170,9 +170,9 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
     def parseTerm(tokens: Tokens): (TermTree, Tokens) = tokens match {
 
       // cases starting with a path
-      case _ if startsWithLowerWord(tokens) =>
+      case _ if startsWithLowerWord(tokens) || startsWithOperator(Brand, tokens) =>
         val res1@(p1, rem1) = parseStablePath(tokens, assert(false))
-        if (startsWithLowerWord(rem1)) {
+        if (startsWithLowerWord(rem1) || startsWithOperator(Brand, rem1)) {
           val (p2, rem2) = parseStablePath(rem1, assert(false))
           (AppTree(p1, p2, p1.position), rem2)
         } else if (startsWithOperator(ColumnEqual, rem1)) {
