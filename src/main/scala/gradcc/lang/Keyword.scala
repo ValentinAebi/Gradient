@@ -21,6 +21,6 @@ enum Keyword(val str: String) {
 
   override def toString: String = str
   
-  def withFirstUppercase: String = str.head.toUpper + str.tail
+  def withFirstUppercase: String = str.head.toUpper +: str.tail
   
 }
