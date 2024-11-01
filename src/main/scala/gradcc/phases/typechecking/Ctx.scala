@@ -41,12 +41,6 @@ private[typechecking] case class Ctx private(
         }
   }
 
-  def enclosureFound(pos: Position): Unit = {
-    if (insideEnclosure) {
-      reporter.error("nested enclosure", pos)
-    }
-  }
-
   def gradualityUsed(pos: Position): Unit = {
     if (!insideEnclosure) {
       reporter.error("illegal use of graduality outside of enclosures", pos)

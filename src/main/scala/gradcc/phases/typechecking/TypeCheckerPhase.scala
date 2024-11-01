@@ -189,7 +189,6 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
       T.ModuleTree(typedRegionCap, substFields, position).withType(tpeOpt)
     }
     case U.EnclosureTree(permissions, explicitTypeTree, body, position) => {
-      ctx.enclosureFound(position)
       val typedPermissions = typeCaptureSet(permissions)
       val typedExplicitType = typeTypeTree(explicitTypeTree)
       val typedBody = typeTerm(body)(using ctx.withEnclosureFlag)
