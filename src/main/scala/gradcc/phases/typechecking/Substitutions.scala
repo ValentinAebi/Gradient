@@ -2,60 +2,51 @@ package gradcc.phases.typechecking
 
 import gradcc.lang.*
 
-type SubstMap = Map[StablePath, StablePath]
+type SubstMap = Map[ProperPath, ProperPath]
 
-def substitute(tpe: Type)(using SubstMap): Type = {
+def substituteType(tpe: Type)(using SubstMap): Type = {
   val Type(shape, captureSet) = tpe
-  Type(substitute(shape), substitute(captureSet))
+  Type(substituteShape(shape), substituteCaptureDescr(captureSet))
 }
 
-def substitute(shape: Shape)(using SubstMap): Shape = shape match {
+def substituteShape(shape: Shape)(using SubstMap): Shape = shape match {
   case TopShape =>
     TopShape
   case AbsShape(varId, varType, resType) =>
-    AbsShape(varId, substitute(varType), substitute(resType))
+    AbsShape(varId, substituteType(varType), substituteType(resType))
   case BoxShape(boxed) =>
-    BoxShape(substitute(boxed))
+    BoxShape(substituteType(boxed))
   case UnitShape =>
     UnitShape
   case RefShape(referenced) =>
-    RefShape(substitute(referenced))
+    RefShape(substituteShape(referenced))
   case RegionShape =>
     RegionShape
   case recordShape: RecordShape =>
-    substitute(recordShape)
+    substituteRecordShape(recordShape)
 }
 
-def substitute(recordShape: RecordShape)(using SubstMap): RecordShape = {
+def substituteRecordShape(recordShape: RecordShape)(using SubstMap): RecordShape = {
   val RecordShape(selfRef, fields) = recordShape
-  RecordShape(selfRef, fields.map((fld, tpe) => (fld, substitute(tpe))))
+  RecordShape(selfRef, fields.map((fld, tpe) => (fld, substituteType(tpe))))
 }
 
-def substitute(p: ProperPath)(using subst: SubstMap): StablePath = {
+def substituteProperPath(p: ProperPath)(using subst: SubstMap): ProperPath = {
   subst.getOrElse(p, {
     p match {
       case capVar: VarPath => capVar
       case SelectPath(lhs, select) =>
-        substitute(lhs) match {
-          case p: ProperPath => SelectPath(p, select)
-          case BrandedPath(p) => BrandedPath(SelectPath(p, select))
-        }
+        SelectPath(substituteProperPath(lhs), select)
     }
   })
 }
 
-def substitute(capDescr: CaptureDescriptor)(using SubstMap): CaptureDescriptor = capDescr match {
-  case CaptureSet(captured) => CaptureSet(captured.map(substitute))
+def substituteCaptureDescr(capDescr: CaptureDescriptor)(using SubstMap): CaptureDescriptor = capDescr match {
+  case CaptureSet(captured) => CaptureSet(captured.map(substituteCapturable))
   case Brand => Brand
 }
 
-def substitute(capturable: Capturable)(using subst: SubstMap): Capturable = capturable match {
-  case p: ProperPath => substitute(p)
-  case BrandedPath(p) =>
-    substitute(p) match {
-      // TODO check that the resulting path must indeed always be branded
-      case properPath: ProperPath => BrandedPath(properPath)
-      case brandedPath: BrandedPath => brandedPath
-    }
+def substituteCapturable(capturable: Capturable)(using subst: SubstMap): Capturable = capturable match {
+  case p: ProperPath => substituteProperPath(p)
   case RootCapability => RootCapability
 }

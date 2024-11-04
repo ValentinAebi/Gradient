@@ -6,7 +6,7 @@ object SubtypingRelation {
 
   extension (l: Type) def subtypeOf(r: Type)(using Ctx): Boolean = (l, r) match {
     case (Type(AbsShape(lv, lvt, lrt), lc), Type(AbsShape(rv, rvt, rrt), rc)) if lv != rv =>
-      l.subtypeOf(substitute(Type(AbsShape(lv, rvt, rrt), rc))(using Map(VarPath(rv) -> VarPath(lv))))
+      l.subtypeOf(substituteType(Type(AbsShape(lv, rvt, rrt), rc))(using Map(VarPath(rv) -> VarPath(lv))))
     case (Type(lSh, lCap), Type(rSh, rCap)) =>
       lSh.subshapeOf(rSh) && lCap.subcaptureOf(rCap)
   }

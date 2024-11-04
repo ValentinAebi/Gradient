@@ -1,0 +1,5 @@
+
+let u = () in
+let f = fn (r: Reg^#) r.ref u in
+let s = region in
+    f #s

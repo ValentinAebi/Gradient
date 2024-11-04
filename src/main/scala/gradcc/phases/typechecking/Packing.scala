@@ -4,10 +4,10 @@ import gradcc.lang.*
 
 def unpackIfRecursive(tpe: Type, selfRef: ProperPath): Type = tpe match {
   case Type(RecordShape(Some(selfVarId), fields), capSet) =>
-    val substMap = Map[StablePath, StablePath](VarPath(selfVarId) -> selfRef)
+    val substMap = Map[ProperPath, ProperPath](VarPath(selfVarId) -> selfRef)
     Type(
       RecordShape(None, fields.map(
-        (fld, tpe) => (fld, substitute(tpe)(using substMap)))
+        (fld, tpe) => (fld, substituteType(tpe)(using substMap)))
       ),
       capSet
     )

@@ -52,11 +52,11 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
         val selfRef = varCreator.nextVar(Keyword.SelfKw.str)
         val selfAwareCtx = ctxWithEquivalences(ctx, selfRef, recordLit)
         val selfRefPath = VarPath(selfRef)
-        val substMap: Map[StablePath, StablePath] =
+        val substMap: Map[ProperPath, ProperPath] =
           (for (freeP <- freePathsInFields; pathFromSelf <- selfAwareCtx.expressAsPathFrom(selfRefPath, freeP)) yield {
             freeP -> pathFromSelf
           }).toMap
-        val substFieldsToTypes = rawFieldsToTypes.map((fld, tpe) => (fld, substitute(tpe)(using substMap)))
+        val substFieldsToTypes = rawFieldsToTypes.map((fld, tpe) => (fld, substituteType(tpe)(using substMap)))
         val filteredCapSet = rawCapSet.removed(substMap.keys)
         val optSelfRef = if substMap.isEmpty then None else Some(selfRef)
         RecordShape(optSelfRef, substFieldsToTypes) ^ filteredCapSet
@@ -76,9 +76,12 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
         case (None, _) => None
         case (_, None) => None
         case (Some(Type(AbsShape(varId, varType, resType), capturedByAbs)), Some(argType)) =>
-          mustBeAssignable(varType, argType, arg.position, {
-            Some(substitute(resType)(using Map(VarPath(varId) -> U.mkStablePath(arg))))
+          val optType = mustBeAssignable(varType, argType, arg.position, {
+            val path = U.mkProperPathFromStablePath(arg)
+            val substituted = substituteType(resType)(using Map(VarPath(varId) -> path))
+            Some(substituted)
           })
+          optType
         case (Some(callerType), _) =>
           ctx.reportError(s"$callerType is not callable", position)
       }
@@ -113,7 +116,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
         typedBody.tpe.flatMap { bodyType =>
           if (varId.id.isFreeIn(bodyType)) {
             bodyCtx.equivalenceClassOf(varId.id).filterNot(_ == varId.id).headOption.map { replId =>
-              substitute(bodyType)(using Map(VarPath(varId.id) -> VarPath(replId)))
+              substituteType(bodyType)(using Map(VarPath(varId.id) -> VarPath(replId)))
             }.orElse(
               ctx.reportError(
                 s"forbidden capture: let body has type $bodyType, which depends on let-bound variable ${varId.id}",
@@ -174,12 +177,12 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
         mustBeAssignable(RegionShape ^ CaptureSet(RootCapability), regionCapType, regionCap.position, None)
       }
       val selfRefVar = varCreator.nextVar(Keyword.SelfKw.str)
-      val regionCapPath = U.mkStablePath(regionCap)
+      val regionCapPath = U.mkProperPathFromStablePath(regionCap)
       val substFields = fields.map(
         (fld, p) =>
           val regPath = SelectPath(VarPath(selfRefVar), RegionField)
           val TypedTermTree(convP, pType) = typeStablePath(p)
-          convertField(fld) -> TypedTermTree(convP, pType.map(substitute(_)(using Map(regionCapPath -> regPath))))
+          convertField(fld) -> TypedTermTree(convP, pType.map(substituteType(_)(using Map(regionCapPath -> regPath))))
       )
       val tpeOpt = collectTypes(substFields).map { fieldTypes =>
         val fieldsToTypes = substFields.map((fld, _) => T.mkField(fld)).zip(fieldTypes).toMap

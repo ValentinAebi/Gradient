@@ -47,6 +47,11 @@ trait UidTermsProvider extends TermsProvider {
     case IdentifierTree(id, position) => VarPath(id)
     case SelectTree(root, fld, position) => SelectPath(mkProperPath(getTerm(root)), mkField(fld))
   }
+  
+  def mkProperPathFromStablePath(stablePathTree: StablePathTree): ProperPath = stablePathTree match {
+    case p: ProperPathTree => mkProperPath(p)
+    case BrandedPathTree(p, pos) => mkProperPath(getTerm(p))
+  }
 
   def mkField(fld: FieldTree): RecordField = fld match {
     case NamedFieldTree(fieldName, position) => NamedField(fieldName)

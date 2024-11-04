@@ -62,9 +62,9 @@ sealed trait Capturable {
   def isRootedIn(varId: UniqueVarId): Boolean
 }
 
-sealed trait StablePath extends Capturable
+sealed trait StablePath
 
-sealed trait ProperPath extends StablePath
+sealed trait ProperPath extends StablePath, Capturable
 
 case class VarPath(root: UniqueVarId) extends ProperPath {
   override def isRootedIn(varId: UniqueVarId): Boolean = (varId == root)
