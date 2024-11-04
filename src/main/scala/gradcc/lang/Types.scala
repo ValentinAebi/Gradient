@@ -78,6 +78,7 @@ case class SelectPath(lhs: ProperPath, field: RecordField) extends ProperPath {
 
 case class BrandedPath(p: ProperPath) extends StablePath {
   export p.isRootedIn
+  override def toString: String = s"#$p"
 }
 
 case object RootCapability extends Capturable {
