@@ -96,7 +96,7 @@ trait TermsProvider {
   
   case class TypeTree(
                        shape: ShapeTree,
-                       captureSet: Option[CaptureSetTree],
+                       captureSet: Option[CaptureDescriptorTree],
                        override val position: Position
                      ) extends Ast
 

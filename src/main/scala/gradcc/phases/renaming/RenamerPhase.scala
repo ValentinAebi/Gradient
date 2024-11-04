@@ -65,7 +65,7 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
       )
     case A.EnclosureTree(permissions, tpe, body, position) =>
       U.EnclosureTree(
-        convertCaptureSetTree(permissions),
+        convertCaptureSet(permissions),
         convertType(tpe),
         convertTerm(body),
         position
@@ -102,7 +102,7 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
 
   private def convertType(tpe: A.TypeTree)(using ctx: Ctx): U.TypeTree = {
     val A.TypeTree(shape, capt, position) = tpe
-    U.TypeTree(convertShape(shape), capt.map(convertCaptureSetTree), position)
+    U.TypeTree(convertShape(shape), capt.map(convertCaptureDescriptor), position)
   }
 
   private def convertShape(shape: A.ShapeTree)(using ctx: Ctx): U.ShapeTree = shape match {
@@ -134,11 +134,11 @@ final class RenamerPhase extends SimplePhase[A.TermTree, U.TermTree]("Renamer") 
   }
   
   private def convertCaptureDescriptor(descr: A.CaptureDescriptorTree)(using ctx: Ctx): U.CaptureDescriptorTree = descr match {
-    case cs: A.CaptureSetTree => convertCaptureSetTree(cs)
+    case cs: A.CaptureSetTree => convertCaptureSet(cs)
     case A.BrandDescriptorTree(position) => U.BrandDescriptorTree(position)
   }
 
-  private def convertCaptureSetTree(capt: A.CaptureSetTree)(using ctx: Ctx): U.CaptureSetTree = capt match {
+  private def convertCaptureSet(capt: A.CaptureSetTree)(using ctx: Ctx): U.CaptureSetTree = capt match {
     case A.NonRootCaptureSetTree(capturedVarsInOrder, position) =>
       U.NonRootCaptureSetTree(capturedVarsInOrder.map(convertProperPath), position)
     case A.RootCaptureSetTree(position) =>

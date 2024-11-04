@@ -28,7 +28,7 @@ def cv(term: TermTree): CaptureDescriptor = term match {
   case ModuleTree(regionCap, fields, position) =>
     cv(regionCap) ++ cvsFrom(fields, (fld, t) => cv(t))
   case EnclosureTree(permissions, tpe, body, position) =>
-    mkCaptureDescr(permissions) ++ cvsFrom(tpe.captureSet, mkCaptureSet)
+    mkCaptureDescr(permissions) ++ cvsFrom(tpe.captureSet, mkCaptureDescr)
   case ObscurTree(obscured, varId, body, position) =>
     Brand
 }

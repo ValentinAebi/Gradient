@@ -10,7 +10,7 @@ trait UidTermsProvider extends TermsProvider {
 
   def mkType(typeTree: TypeTree): Type = Type(
     mkShape(typeTree.shape),
-    typeTree.captureSet.map(mkCaptureSet).getOrElse(CaptureSet.empty)
+    typeTree.captureSet.map(mkCaptureDescr).getOrElse(CaptureSet.empty)
   )
 
   def mkShape(typeShapeTree: ShapeTree): Shape = typeShapeTree match {

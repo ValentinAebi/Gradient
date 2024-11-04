@@ -247,7 +247,7 @@ final class TypeCheckerPhase extends SimplePhase[U.TermTree, TypedTermTree[T.Ter
 
   private def typeTypeTree(tt: U.TypeTree)(using Ctx): T.TypeTree = {
     val U.TypeTree(shape, captureSet, position) = tt
-    T.TypeTree(typeShapeTree(shape), captureSet.map(typeCaptureSet), position)
+    T.TypeTree(typeShapeTree(shape), captureSet.map(typeCaptureDescr), position)
   }
 
   private def typeShapeTree(shape: U.ShapeTree)(using Ctx): T.ShapeTree = shape match {

@@ -1,4 +1,5 @@
 
 let u = () in
+let f = fn (r: Reg^#) r in
 let x = #u in
     encl[{}][Unit] #u
