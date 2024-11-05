@@ -15,6 +15,6 @@ object UniquelyNamedTerms extends UidTermsProvider {
 
 final case class UniqueVarId(varName: String, idx: Int){
   
-  override def toString: String = varName + "'" + idx
+  override def toString: String = varName + "@" + idx
   
 }
