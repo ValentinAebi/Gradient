@@ -1,0 +1,4 @@
+
+// contravariant arguments, covariant result
+fn (f: (_: Top) -> Unit)(g: (_: (_: Unit) -> Top) -> Unit)
+    g f

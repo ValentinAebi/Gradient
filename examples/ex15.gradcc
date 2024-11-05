@@ -1,0 +1,5 @@
+
+let u = () in
+encl[{}][(_: Reg) -> Reg^]
+    obscur u as x in
+        fn (r: Reg^{x}) r

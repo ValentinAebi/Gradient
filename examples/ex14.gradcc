@@ -1,0 +1,11 @@
+
+let f =
+    fn (r: Reg^)(p: (Ref Reg)^{r})(g: (u: Unit) -> Ref Box Reg^#)
+        encl[{r}][Ref Box Reg^]
+            let u = () in
+            let rb = g u in
+            obscur rb as rbo in
+                rbo
+in
+    ()
+
