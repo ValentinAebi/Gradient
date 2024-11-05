@@ -95,14 +95,17 @@ def TermsPrettyprinter(
         add("][")
         ppType(tpe)
         add("]")
+        incIndent().newLine()
         ppRecTerm(body)
+        decIndent()
       case p.ObscurTree(obscured, varId, body, position) =>
         add(ObscurKw).add(" ")
         ppRecTerm(obscured)
         add(" ").add(AsKw).add(" ")
         ppTerm(varId)
-        add(" ").add(InKw).add(" ")
+        add(" ").add(InKw).incIndent().newLine()
         ppRecTerm(body)
+        decIndent()
     }
   }
 
@@ -226,7 +229,7 @@ def TermsPrettyprinter(
   }
 
   ppRecTerm(term)
-  addIfConsiderTypes(typeAnnot(p.getType(term)))
+  addIfConsiderTypes("\n" + typeAnnot(p.getType(term)))
   isb.toString
 }
 
