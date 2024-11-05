@@ -330,6 +330,15 @@ final class ParserPhase extends SimplePhase[Seq[GradCCToken], TermTree]("Parser"
           val (resType, rem2) = parseType(rem1)
           maybeWithCaptureSet(AbsShapeTree(varId, varType, resType, tokens.head.pos), rem2)
         case _ => tokens match {
+          case OperatorToken(OpenParenth, _) :: rem1 =>
+            parseShapeOrType(rem1) match {
+              case (s: ShapeTree, OperatorToken(CloseParenth, _) :: rem2) =>
+                maybeWithCaptureSet(s, rem2)
+              case (tpe: TypeTree, OperatorToken(CloseParenth, _) :: rem2) =>
+                (tpe, rem2)
+              case (_, rem2) =>
+                reporter.fatal("unclosed parenthesis", rem2.headPos)
+            }
           case KeywordToken(TopKw, pos) :: rem =>
             maybeWithCaptureSet(TopShapeTree(pos), rem)
           case KeywordToken(BoxKw, pos) :: rem1 =>
