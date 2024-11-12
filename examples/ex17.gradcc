@@ -1,0 +1,13 @@
+
+// GradCC representation of the following code:
+// val foo = new Foo(());       where   Foo { var x: Unit }
+// val bar = new Bar(foo);      where   Bar { var y: Foo^{r} }
+
+// fn update(b: Bar) { b.foo.u = () }
+
+let u = () in
+let foo_reg = region in
+let foo_mut_fld_x = foo_reg.ref u in
+let foo = mod(foo_reg) { x = foo_mut_fld_x } in
+let bar = { y = foo } in
+    bar
