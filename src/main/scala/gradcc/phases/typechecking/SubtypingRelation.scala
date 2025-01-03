@@ -16,10 +16,10 @@ object SubtypingRelation {
     case (CaptureSet(lcs), CaptureSet(rcs)) =>
       if (lcs.size == 1) {
         lcs.head match {
-          // Sc-path
-          case p: ProperPath if ctx.pathLookup(p).exists(_.captureDescr.subcaptureOf(r)) => true
           // Sc-elem
           case p if rcs.contains(p) => true
+          // Sc-path
+          case p: ProperPath if ctx.pathLookup(p).exists(_.captureDescr.subcaptureOf(r)) => true
           // Sc-mem
           case SelectPath(lhs, select) if CaptureSet(lhs).subcaptureOf(r) => true
           case _ => false
