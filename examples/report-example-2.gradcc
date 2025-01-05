@@ -1,0 +1,7 @@
+
+let rc =
+    let r = region in
+    let f = fn (u: Unit) r in
+        { a = r, b = r, f = f }
+in
+    { x = rc.a, f = rc.f }

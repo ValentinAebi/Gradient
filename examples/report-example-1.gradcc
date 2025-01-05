@@ -1,0 +1,6 @@
+
+// TODO add all report examples to this repo
+
+let cpb = region in
+let closure = fn (u: Unit) cpb in
+    { cpb = cpb, closure = closure}
