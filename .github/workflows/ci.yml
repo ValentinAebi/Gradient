@@ -10,5 +10,5 @@ jobs:
       - uses: olafurpg/setup-scala@v11
         with:
           distribution: temurin
-          java-version: 22
+          java-version: 21
       - run: sbt -v +test
